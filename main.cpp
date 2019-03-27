@@ -1,37 +1,59 @@
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <strings.h>
 
-int main() {
-    std::cout << "Hello, World!" << std::endl;
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <unistd.h>
 
-    struct sockaddr_in sa;
-    struct hostent* hostEnt;
+#include <string.h>
 
-    int retVal = gethostname(srvName, WA_MAX_NAME);
-    if (retVal < 0) {
-        std::cerr << "gethostname", errno);
-    }
+#define MAX_SERVER_NAME 50
+#define MAX_INCOMING_QUEUE 1
+#define PORT_NUMBER 54321
 
-    bzero(&sa, sizeof(struct sockaddr_in));
-    hostEnt = gethostbyname(srvName);
-    if (hostEnt == nullptr) {
-        std::cerr << "gethostbyname", errno);
-    }
+void print_error(const std::string& function_name, int error_number) {
+    printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
+    exit(EXIT_FAILURE);
+}
 
-    memset(&sa, 0, sizeof(sa));
-    sa.sin_family = (sa_family_t) hostEnt->h_addrtype;
-    memcpy(&sa.sin_addr, hostEnt->h_addr, (size_t) hostEnt->h_length);
-    sa.sin_port = htons(portNumber);
+int setup_socket() {
+    struct sockaddr_in serverAddress;
+
 
 
     int welcomeSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (welcomeSocket < 0) {
-        std::cerr << "socket() error" << std::endl;
+        print_error("socket() error", errno);
     }
 
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = INADDR_ANY;
+    serverAddress.sin_port = htons(PORT_NUMBER);
 
+    int retVal = bind(welcomeSocket, (struct sockaddr*) &serverAddress, sizeof(serverAddress));
+    if (retVal < 0) {
+        print_error("bind", errno);
+    }
+
+    retVal = listen(welcomeSocket, MAX_INCOMING_QUEUE);
+
+    if (retVal < 0) { print_error("listen", errno); }
+
+    // accepting socket - server will enter BLOCKING STATE until client connects.
+    int connectionSocket = accept(welcomeSocket, nullptr, nullptr);
+
+    if (connectionSocket < 0) {
+        print_error("accept", errno);
+    }
+
+    return connectionSocket;
+
+}
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+
+    int cSocket = setup_socket();
 
 
     return 0;
