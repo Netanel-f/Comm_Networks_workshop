@@ -3,4 +3,4 @@ project(Comm_Nets)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(Comm_Nets main.cpp)
+add_executable(Comm_Nets main.cpp client.cpp)
