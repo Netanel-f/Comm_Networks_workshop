@@ -8,7 +8,6 @@
 
 #include <string.h>
 
-#define MAX_SERVER_NAME 50
 #define MAX_INCOMING_QUEUE 1
 #define PORT_NUMBER 54321
 
