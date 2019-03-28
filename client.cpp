@@ -10,7 +10,7 @@
 
 #define MAX_INCOMING_QUEUE 1
 #define PORT_NUMBER 54321
-#define MIN_WARMUP_CYCLES = 100
+#define MIN_WARMUP_CYCLES 100
 
 void print_error(const std::string& function_name, int error_number) {
     printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
@@ -41,6 +41,22 @@ int setup_socket() {
     }
 
     return welcomeSocket
+}
+
+void warmup(int outfd){
+//    int sentMessagesCounter = 0;
+    int receivedMessages = 0;
+
+    //create message in size
+    std::string msg = "A";
+    //take time
+
+    for (int sentMessagesCounter = 0; sentMessagesCounter < MIN_WARMUP_CYCLES; sentMessagesCounter++)
+        //send msg
+
+        //wait for replay?
+
+        // calc RTT/2
 }
 
 
