@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <string.h>
+#include <chrono>
 
 #define MAX_INCOMING_QUEUE 1
 #define PORT_NUMBER 54321
@@ -17,11 +18,28 @@ void print_error(const std::string& function_name, int error_number) {
     exit(EXIT_FAILURE);
 }
 
-int setup_socket() {
+class Client {
+    int welcomeSocket;
+    int serverfd;
+
+public:
+    //// C-tor
+    Client();
+
+    //// client actions
+
+private:
+    void killClient();
+
+    void warmup();
+};
+
+Client::Client() {
+
     struct sockaddr_in clientAddress;
     struct sockaddr_in serverAddress;
 
-    int welcomeSocket = socket(AF_INET, SOCK_STREAM, 0);
+    welcomeSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (welcomeSocket < 0) {
         print_error("socket() error", errno);
     }
@@ -30,43 +48,33 @@ int setup_socket() {
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(PORT_NUMBER);
 
-    int retVal = inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr)
+    int retVal = inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
     if (retVal <= 0) {
         print_error("inet_pton()", errno);
     }
 
-    retVal = connect(welcomeSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)))
-    if (retVal < 0) {
+    serverfd = connect(welcomeSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
+    if (serverfd < 0) {
         print_error("connect()", errno);
     }
 
-    return welcomeSocket
 }
 
-void warmup(int outfd){
-//    int sentMessagesCounter = 0;
-    int receivedMessages = 0;
+void Client::killClient() {
+    int retVal = close(this->welcomeSocket);
 
-    //create message in size
-    std::string msg = "A";
-    //take time
-
-    for (int sentMessagesCounter = 0; sentMessagesCounter < MIN_WARMUP_CYCLES; sentMessagesCounter++)
-        //send msg
-
-        //wait for replay?
-
-        // calc RTT/2
 }
 
 
 int main(int argc, char const *argv[]) {
     std::cout << "Hello, World!" << std::endl;
+    Client client = Client();
 
-    int cSocket = setup_socket();
 
     // TODO WARM-UP cycles
     // sending MIN cycles packets and counting
 
+//    close(welcomeSocket);
+    std::cout << "Bye, World!" << std::endl;
     return 0;
 }

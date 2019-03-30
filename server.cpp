@@ -17,11 +17,32 @@ void print_error(const std::string& function_name, int error_number) {
     exit(EXIT_FAILURE);
 }
 
-int setup_socket() {
+class Server {
+    int welcomeSocket;
+    int clientfd;
+
+//    char readBuf[WA_MAX_INPUT+1];
+//    char writeBuf[WA_MAX_INPUT+1];
+
+//    fd_set clientsfds;
+//    fd_set readfds;
+
+public:
+    //// C-tor
+    Server();
+
+    //// server actions
+
+private:
+    void killServer();
+};
+
+Server::Server() {
+
     struct sockaddr_in serverAddress;
 
 
-    int welcomeSocket = socket(AF_INET, SOCK_STREAM, 0);
+    welcomeSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (welcomeSocket < 0) {
         print_error("socket() error", errno);
     }
@@ -46,15 +67,20 @@ int setup_socket() {
         print_error("accept", errno);
     }
 
-    return retVal;
+    this->clientfd = retVal;
 
 }
+
+void Server::killServer() {
+    int retVal = close(this->welcomeSocket);
+}
+
 int main() {
     std::cout << "Hello, World!" << std::endl;
 
-    int clientfd = setup_socket();
+    Server server =  Server();
 
-    close(welcomeSocket);
+
     std::cout << "Bye, World!" << std::endl;
 
 
