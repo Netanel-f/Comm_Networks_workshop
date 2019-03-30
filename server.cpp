@@ -9,8 +9,8 @@
 
 #include <string.h>
 
-#define MAX_INCOMING_QUEUE 1
-#define PORT_NUMBER 54321
+#include "shared.h"
+
 
 void print_error(const std::string& function_name, int error_number) {
     printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
@@ -21,7 +21,7 @@ class Server {
     int welcomeSocket;
     int clientfd;
 
-//    char readBuf[WA_MAX_INPUT+1];
+    char readBuf[WARMPUP_PACKET_SIZE + 1];
 //    char writeBuf[WA_MAX_INPUT+1];
 
 //    fd_set clientsfds;
@@ -32,9 +32,11 @@ public:
     Server();
 
     //// server actions
+    void killServer();
+    void warmup_echo_back();
 
 private:
-    void killServer();
+
 };
 
 Server::Server() {
@@ -45,6 +47,10 @@ Server::Server() {
     welcomeSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (welcomeSocket < 0) {
         print_error("socket() error", errno);
+    }
+    int enable = 1;
+    if (setsockopt(welcomeSocket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0){
+        print_error("setsockopt", errno);
     }
 
     serverAddress.sin_family = AF_INET;
@@ -69,10 +75,44 @@ Server::Server() {
 
     this->clientfd = retVal;
 
+
+    bzero(this->readBuf, WARMPUP_PACKET_SIZE + 1);
 }
 
 void Server::killServer() {
-    int retVal = close(this->welcomeSocket);
+    int retVal = close(this->clientfd);
+    std::cout << "close output: " << retVal << std::endl;
+    retVal = close(this->welcomeSocket);
+    std::cout << "close output: " << retVal << std::endl;
+
+}
+
+void Server::warmup_echo_back() {
+    int received = 0;
+    int retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+    if (retVal < 0) {
+        print_error("recv() failed", errno);
+    }
+    received++;
+    while (retVal > 0) {
+        retVal = send(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+        if (retVal != WARMPUP_PACKET_SIZE) {
+            print_error("send() failed", errno);
+        }
+        if (received == PACKETS_PER_CYCLE) {
+            std::cout << "received " << PACKETS_PER_CYCLE << " msgs" << std::endl;
+
+            return;
+        }
+        retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+        if (retVal < 0) {
+            print_error("recv() failed", errno);
+        }
+        received++;
+
+    }
+
+
 }
 
 int main() {
@@ -80,8 +120,15 @@ int main() {
 
     Server server =  Server();
 
+    for (int i=0; i<MIN_WARMUP_CYCLES; i++) {
+        std::cout << "warmup_echo_back #" << i << std::endl;
+
+        server.warmup_echo_back();
+    }
+
 
     std::cout << "Bye, World!" << std::endl;
+    server.killServer();
 
 
     return 0;

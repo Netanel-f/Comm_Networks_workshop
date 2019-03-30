@@ -7,11 +7,14 @@
 #include <unistd.h>
 
 #include <string.h>
+#include <cstring>
+#include <string>
 #include <chrono>
+#include <vector>
+#include <numeric>
 
-#define MAX_INCOMING_QUEUE 1
-#define PORT_NUMBER 54321
-#define MIN_WARMUP_CYCLES 100
+#include "shared.h"
+
 
 void print_error(const std::string& function_name, int error_number) {
     printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
@@ -19,19 +22,21 @@ void print_error(const std::string& function_name, int error_number) {
 }
 
 class Client {
-    int welcomeSocket;
     int serverfd;
+
+    char readBuf[WARMPUP_PACKET_SIZE + 1];
+    char writeBuf[WARMPUP_PACKET_SIZE + 1];
 
 public:
     //// C-tor
     Client();
 
     //// client actions
+    void killClient();
+    void warmup();
 
 private:
-    void killClient();
 
-    void warmup();
 };
 
 Client::Client() {
@@ -39,8 +44,8 @@ Client::Client() {
     struct sockaddr_in clientAddress;
     struct sockaddr_in serverAddress;
 
-    welcomeSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (welcomeSocket < 0) {
+    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverfd < 0) {
         print_error("socket() error", errno);
     }
 
@@ -48,33 +53,112 @@ Client::Client() {
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(PORT_NUMBER);
 
-    int retVal = inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+    int retVal = inet_pton(AF_INET, SERVER_ADDRESS, &serverAddress.sin_addr);
     if (retVal <= 0) {
         print_error("inet_pton()", errno);
     }
 
-    serverfd = connect(welcomeSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
-    if (serverfd < 0) {
+    retVal = connect(serverfd, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
+    if (retVal != 0) {
         print_error("connect()", errno);
     }
 
+    bzero(this->writeBuf, 100+1);
 }
 
 void Client::killClient() {
-    int retVal = close(this->welcomeSocket);
+    int retVal = close(serverfd);
+    std::cout << "close output: " << retVal << std::endl;
 
 }
 
+void Client::warmup() {
+//    int sentMessages = 0;
+    int receivedMessages = 0;
+
+    std::chrono::high_resolution_clock clock;
+    std::chrono::high_resolution_clock::time_point startTime;
+    std::chrono::high_resolution_clock::time_point endTime;
+
+    std::vector<std::chrono::high_resolution_clock::duration> durations;
+    size_t num_of_messages = 0;
+
+    for (int cycle_number = 0; cycle_number < MIN_WARMUP_CYCLES; cycle_number++){
+        std::cout << "warmup cycle #" << cycle_number << std::endl;
+        //create message in size
+        char msg[WARMPUP_PACKET_SIZE];
+        memset(msg, 1, WARMPUP_PACKET_SIZE);
+        size_t msg_size = WARMPUP_PACKET_SIZE;
+
+        //take time
+        startTime = std::chrono::high_resolution_clock::now();
+
+        for (int sent = 0; sent < PACKETS_PER_CYCLE; sent++) {
+            //send msg
+            int retVal = send(this->serverfd, &msg, msg_size, 0);
+            if (retVal != msg_size) {
+                print_error("send() failed", errno);
+            }
+        }
+
+        int received = 0;
+        int retVal = recv(this->serverfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+        if (retVal < 0) {
+            print_error("recv() failed", errno);
+        }
+        received++;
+        while (retVal > 0) {
+            retVal = send(this->serverfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+            if (retVal != WARMPUP_PACKET_SIZE) {
+                print_error("send() failed", errno);
+            }
+            if (received == PACKETS_PER_CYCLE) {
+                endTime = std::chrono::high_resolution_clock::now();
+                break;
+            }
+            retVal = recv(this->serverfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+            if (retVal < 0) {
+                print_error("recv() failed", errno);
+            }
+            received++;
+
+        }
+        durations.push_back(endTime - startTime);
+        num_of_messages += (2* PACKETS_PER_CYCLE);
+        auto totalTimeMS = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+        std::cout << "totalTimeMS: " << totalTimeMS << std::endl;
+
+    }
+
+    auto bytes_transferred = MIN_WARMUP_CYCLES * num_of_messages * WARMPUP_PACKET_SIZE;
+    auto total_time = std::accumulate(durations.begin(), durations.end(),
+            std::chrono::high_resolution_clock::duration(0));
+
+
+    auto totalTimeMS = std::chrono::duration_cast<std::chrono::milliseconds>(total_time).count();
+    std::cout << "totalTimeMS: " << totalTimeMS << std::endl;
+
+    auto rtt = bytes_transferred / totalTimeMS;
+    std::cout << "rtt: " << rtt << std::endl;
+    auto throughput = rtt / 2;
+    std::cout << "throughput: " << throughput << std::endl;
+
+
+}
 
 int main(int argc, char const *argv[]) {
     std::cout << "Hello, World!" << std::endl;
     Client client = Client();
-
+    client.warmup();
+//    for (int i=0; i<1000; i++) {
+//        client.warmup();
+//    }
 
     // TODO WARM-UP cycles
     // sending MIN cycles packets and counting
 
 //    close(welcomeSocket);
     std::cout << "Bye, World!" << std::endl;
+    client.killClient();
     return 0;
 }
