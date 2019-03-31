@@ -43,6 +43,7 @@ Server::Server() {
 
     struct sockaddr_in serverAddress;
 
+    bzero(&serverAddress, sizeof(struct sockaddr_in));
 
     welcomeSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (welcomeSocket < 0) {
@@ -75,7 +76,7 @@ Server::Server() {
 
     this->clientfd = retVal;
 
-
+//    memset(this->readBuf, 0, WARMPUP_PACKET_SIZE+1);
     bzero(this->readBuf, WARMPUP_PACKET_SIZE + 1);
 }
 
@@ -89,7 +90,7 @@ void Server::killServer() {
 
 void Server::warmup_echo_back() {
     int received = 0;
-    int retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+    ssize_t retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
     if (retVal < 0) {
         print_error("recv() failed", errno);
     }
@@ -112,6 +113,7 @@ void Server::warmup_echo_back() {
 
     }
 
+    std::cout << "received total of " << received << std::endl;
 
 }
 

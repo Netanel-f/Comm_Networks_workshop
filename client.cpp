@@ -63,7 +63,7 @@ Client::Client() {
         print_error("connect()", errno);
     }
 
-    bzero(this->writeBuf, 100+1);
+    bzero(this->writeBuf, WARMPUP_PACKET_SIZE + 1);
 }
 
 void Client::killClient() {
@@ -95,38 +95,24 @@ void Client::warmup() {
 
         for (int sent = 0; sent < PACKETS_PER_CYCLE; sent++) {
             //send msg
-            int retVal = send(this->serverfd, &msg, msg_size, 0);
+            ssize_t retVal = send(this->serverfd, &msg, msg_size, 0);
             if (retVal != msg_size) {
                 print_error("send() failed", errno);
             }
-        }
 
-        int received = 0;
-        int retVal = recv(this->serverfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
-        if (retVal < 0) {
-            print_error("recv() failed", errno);
-        }
-        received++;
-        while (retVal > 0) {
-            retVal = send(this->serverfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
-            if (retVal != WARMPUP_PACKET_SIZE) {
-                print_error("send() failed", errno);
-            }
-            if (received == PACKETS_PER_CYCLE) {
-                endTime = std::chrono::high_resolution_clock::now();
-                break;
-            }
             retVal = recv(this->serverfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
             if (retVal < 0) {
                 print_error("recv() failed", errno);
             }
-            received++;
 
         }
+
+        endTime = std::chrono::high_resolution_clock::now();
+
         durations.push_back(endTime - startTime);
-        num_of_messages += (2* PACKETS_PER_CYCLE);
-        auto totalTimeMS = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-        std::cout << "totalTimeMS: " << totalTimeMS << std::endl;
+        num_of_messages += (2 * PACKETS_PER_CYCLE);
+//        auto totalTimeMS = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+//        std::cout << "totalTimeMS: " << totalTimeMS << std::endl;
 
     }
 
@@ -138,10 +124,14 @@ void Client::warmup() {
     auto totalTimeMS = std::chrono::duration_cast<std::chrono::milliseconds>(total_time).count();
     std::cout << "totalTimeMS: " << totalTimeMS << std::endl;
 
-    auto rtt = bytes_transferred / totalTimeMS;
-    std::cout << "rtt: " << rtt << std::endl;
-    auto throughput = rtt / 2;
-    std::cout << "throughput: " << throughput << std::endl;
+    auto throughput = bytes_transferred / totalTimeMS;
+    std::cout << "rtt: " << throughput << " bytes/millisecond" << std::endl;
+
+    auto rtt = totalTimeMS / (MIN_WARMUP_CYCLES * PACKETS_PER_CYCLE);
+    std::cout << "rtt: " << rtt << " totalTimeMS / (MIN_WARMUP_CYCLES * PACKETS_PER_CYCLE)" << std::endl;
+    auto latency = rtt / 2;
+    std::cout << "latency: " << latency << " bytes/millisecond" << std::endl;
+//    std::cout << "throughput: " << throughput << " bytes/millisecond" << std::endl;
 
 
 }
