@@ -1,14 +1,3 @@
-#include <stdio.h>
-#include <iostream>
-#include <sys/socket.h>
-#include <netinet/in.h>
-
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-
-#include <string.h>
-
 #include "shared.h"
 
 
@@ -22,18 +11,16 @@ class Server {
     int clientfd;
 
     char readBuf[WARMPUP_PACKET_SIZE + 1];
-//    char writeBuf[WA_MAX_INPUT+1];
 
-//    fd_set clientsfds;
-//    fd_set readfds;
 
 public:
     //// C-tor
     Server();
 
+    void warmup_echo_back(bool * keepEcho);
+    void echo();
     //// server actions
     void killServer();
-    void warmup_echo_back(bool * keepEcho);
 
 private:
 
@@ -76,7 +63,6 @@ Server::Server() {
 
     this->clientfd = retVal;
 
-//    memset(this->readBuf, 0, WARMPUP_PACKET_SIZE+1);
     bzero(this->readBuf, WARMPUP_PACKET_SIZE + 1);
 }
 
@@ -106,7 +92,7 @@ void Server::warmup_echo_back(bool * keepEcho) {
             print_error("send() failed", errno);
         }
         if (received == PACKETS_PER_CYCLE) {
-            std::cout << "received " << PACKETS_PER_CYCLE << " msgs" << std::endl;
+            if (DEBUG) { std::cout << "received " << PACKETS_PER_CYCLE << " msgs" << std::endl; }
 
             return;
         }
@@ -118,20 +104,43 @@ void Server::warmup_echo_back(bool * keepEcho) {
 
     }
 
-    std::cout << "received total of " << received << std::endl;
+    if (DEBUG) { std::cout << "received total of " << received << std::endl; }
+
+}
+
+void Server::echo() {
+    bool keepEcho = true;
+    int echoCounter = 0;
+    while (keepEcho) {
+        ssize_t retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+        if (retVal < 0) {
+            print_error("recv() failed", errno);
+        }
+        if (retVal == 0) {
+            keepEcho = false;
+            if (DEBUG) { std::cout << "received total of " << echoCounter << std::endl; }
+            return;
+        }
+        echoCounter++;
+        retVal = send(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+        if (retVal < 0) {
+            print_error("send() failed", errno);
+        }
+    }
 
 }
 
 int main() {
 
     Server server =  Server();
-    bool keepEcho = true;
-    int echoCounter = 0;
-    while (keepEcho) {
-        std::cout << "warmup_echo_back #" << echoCounter << std::endl;
-        server.warmup_echo_back(&keepEcho);
-        echoCounter++;
-    }
+    server.echo();
+//    bool keepEcho = true;
+//    int echoCounter = 0;
+//    while (keepEcho) {
+//        if (DEBUG) { std::cout << "warmup_echo_back #" << echoCounter << std::endl; }
+//        server.warmup_echo_back(&keepEcho);
+//        echoCounter++;
+//    }
 
     server.killServer();
 
