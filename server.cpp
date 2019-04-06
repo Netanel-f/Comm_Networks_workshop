@@ -33,7 +33,7 @@ public:
 
     //// server actions
     void killServer();
-    void warmup_echo_back();
+    void warmup_echo_back(bool * keepEcho);
 
 private:
 
@@ -81,6 +81,7 @@ Server::Server() {
 }
 
 void Server::killServer() {
+    std::cout << "Bye, World!" << std::endl;
     int retVal = close(this->clientfd);
     std::cout << "close output: " << retVal << std::endl;
     retVal = close(this->welcomeSocket);
@@ -88,11 +89,15 @@ void Server::killServer() {
 
 }
 
-void Server::warmup_echo_back() {
+void Server::warmup_echo_back(bool * keepEcho) {
     int received = 0;
     ssize_t retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
     if (retVal < 0) {
         print_error("recv() failed", errno);
+    }
+    if (retVal == 0) {
+        *keepEcho = false;
+        return;
     }
     received++;
     while (retVal > 0) {
@@ -118,18 +123,16 @@ void Server::warmup_echo_back() {
 }
 
 int main() {
-    std::cout << "Hello, World!" << std::endl;
 
     Server server =  Server();
-
-    for (int i=0; i<MIN_WARMUP_CYCLES; i++) {
-        std::cout << "warmup_echo_back #" << i << std::endl;
-
-        server.warmup_echo_back();
+    bool keepEcho = true;
+    int echoCounter = 0;
+    while (keepEcho) {
+        std::cout << "warmup_echo_back #" << echoCounter << std::endl;
+        server.warmup_echo_back(&keepEcho);
+        echoCounter++;
     }
 
-
-    std::cout << "Bye, World!" << std::endl;
     server.killServer();
 
 

@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include <unistd.h>
 
+#include <stdbool.h>
 #include <string.h>
 #include <cstring>
 #include <string>
@@ -67,7 +68,9 @@ Client::Client() {
 }
 
 void Client::killClient() {
-    int retVal = close(serverfd);
+    std::cout << "Bye, World!" << std::endl;
+//    int retVal = close(serverfd);
+    int retVal = shutdown(serverfd, SHUT_RDWR);
     std::cout << "close output: " << retVal << std::endl;
 
 }
@@ -82,9 +85,11 @@ void Client::warmup() {
 
     std::vector<std::chrono::high_resolution_clock::duration> durations;
     size_t num_of_messages = 0;
+    bool keepWarmUp = true;
+    int cycles_counter = 0;
 
-    for (int cycle_number = 0; cycle_number < MIN_WARMUP_CYCLES; cycle_number++){
-        std::cout << "warmup cycle #" << cycle_number << std::endl;
+    while (keepWarmUp) {
+        std::cout << "warmup cycle #" << cycles_counter << std::endl;
         //create message in size
         char msg[WARMPUP_PACKET_SIZE];
         memset(msg, 1, WARMPUP_PACKET_SIZE);
@@ -108,15 +113,54 @@ void Client::warmup() {
         }
 
         endTime = std::chrono::high_resolution_clock::now();
+        std::chrono::high_resolution_clock::duration currentCycleDuration = endTime - startTime;
+        cycles_counter++;
+        if (cycles_counter > 10) {
+            std::chrono::high_resolution_clock::duration lastCycleDuration = durations.back();
+            if (currentCycleDuration - lastCycleDuration < (lastCycleDuration / 100)) {
+                keepWarmUp = false;
+            }
+        }
 
-        durations.push_back(endTime - startTime);
+        durations.push_back(currentCycleDuration);
         num_of_messages += (2 * PACKETS_PER_CYCLE);
-//        auto totalTimeMS = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-//        std::cout << "totalTimeMS: " << totalTimeMS << std::endl;
 
     }
+//    for (int cycle_number = 0; cycle_number < MIN_WARMUP_CYCLES; cycle_number++){
+//        std::cout << "warmup cycle #" << cycle_number << std::endl;
+//        //create message in size
+//        char msg[WARMPUP_PACKET_SIZE];
+//        memset(msg, 1, WARMPUP_PACKET_SIZE);
+//        size_t msg_size = WARMPUP_PACKET_SIZE;
+//
+//        //take time
+//        startTime = std::chrono::high_resolution_clock::now();
+//
+//        for (int sent = 0; sent < PACKETS_PER_CYCLE; sent++) {
+//            //send msg
+//            ssize_t retVal = send(this->serverfd, &msg, msg_size, 0);
+//            if (retVal != msg_size) {
+//                print_error("send() failed", errno);
+//            }
+//
+//            retVal = recv(this->serverfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+//            if (retVal < 0) {
+//                print_error("recv() failed", errno);
+//            }
+//
+//        }
+//
+//        endTime = std::chrono::high_resolution_clock::now();
+//
+//        durations.push_back(endTime - startTime);
+//        num_of_messages += (2 * PACKETS_PER_CYCLE);
+////        auto totalTimeMS = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+////        std::cout << "totalTimeMS: " << totalTimeMS << std::endl;
+//
+//    }
 
-    auto bytes_transferred = MIN_WARMUP_CYCLES * num_of_messages * WARMPUP_PACKET_SIZE;
+//    auto bytes_transferred = MIN_WARMUP_CYCLES * num_of_messages * WARMPUP_PACKET_SIZE;
+    auto bytes_transferred = cycles_counter * num_of_messages * WARMPUP_PACKET_SIZE;
     auto total_time = std::accumulate(durations.begin(), durations.end(),
             std::chrono::high_resolution_clock::duration(0));
 
@@ -125,30 +169,21 @@ void Client::warmup() {
     std::cout << "totalTimeMS: " << totalTimeMS << std::endl;
 
     auto throughput = bytes_transferred / totalTimeMS;
-    std::cout << "rtt: " << throughput << " bytes/millisecond" << std::endl;
+    std::cout << "throughput: " << throughput << " bytes/millisecond" << std::endl;
 
     auto rtt = totalTimeMS / (MIN_WARMUP_CYCLES * PACKETS_PER_CYCLE);
     std::cout << "rtt: " << rtt << " totalTimeMS / (MIN_WARMUP_CYCLES * PACKETS_PER_CYCLE)" << std::endl;
     auto latency = rtt / 2;
-    std::cout << "latency: " << latency << " bytes/millisecond" << std::endl;
+    std::cout << "latency: " << latency << " milliseconds" << std::endl;
 //    std::cout << "throughput: " << throughput << " bytes/millisecond" << std::endl;
 
 
 }
 
 int main(int argc, char const *argv[]) {
-    std::cout << "Hello, World!" << std::endl;
     Client client = Client();
     client.warmup();
-//    for (int i=0; i<1000; i++) {
-//        client.warmup();
-//    }
 
-    // TODO WARM-UP cycles
-    // sending MIN cycles packets and counting
-
-//    close(welcomeSocket);
-    std::cout << "Bye, World!" << std::endl;
     client.killClient();
     return 0;
 }
