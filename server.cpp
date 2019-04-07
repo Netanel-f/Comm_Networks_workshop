@@ -111,6 +111,7 @@ void Server::echo() {
     bool keepEcho = true;
     int echoCounter = 0;    // TODO DELETE DEBUG
     while (keepEcho) {
+        // todo do we need to clean the
         ssize_t retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
         if (DEBUG) { std::cout << "warmup recieved size: " << retVal<< std::endl; }
         if (retVal < 0) {

@@ -24,6 +24,9 @@
 #define WARMPUP_PACKET_SIZE 1024
 #define MIN_WARMUP_CYCLES 100
 #define PACKETS_PER_CYCLE 1000
+#define RTT_PACKETS_PER_CYCLE 100
+#define RTT_NUM_OF_CYCLES 100
+
 #define LATENCY_MIN_WARM_PACKETS 1000
 
 #define DEBUG true  // TODO delete before submission
