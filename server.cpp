@@ -146,6 +146,7 @@ int main() {
     // setup server, echo back client's messages when done, kill server.
     Server server =  Server();
     server.echo();
+    server.echo();
     server.killServer();
 
     return EXIT_SUCCESS;

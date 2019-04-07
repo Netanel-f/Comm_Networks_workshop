@@ -12,7 +12,6 @@ class Client {
     int serverfd;
 
     char readBuf[WARMPUP_PACKET_SIZE + 1] = "0";
-    char writeBuf[WARMPUP_PACKET_SIZE + 1] = "0";
 
 public:
     //// C-tor
@@ -52,7 +51,7 @@ Client::Client(const char * serverIP) {
         print_error("connect()", errno);
     }
 
-    bzero(this->writeBuf, WARMPUP_PACKET_SIZE + 1);
+    bzero(this->readBuf, WARMPUP_PACKET_SIZE + 1);
 }
 
 void Client::killClient() {
@@ -230,8 +229,8 @@ void Client::measureRTT(size_t packetSize) {
     float max_rate = 0.0;
 
     // init calculations
-    auto bytes_transferred = RTT_NUM_OF_CYCLES * RTT_PACKETS_PER_CYCLE* packetSize;
-    auto Mbits_transferred = 80000000 * bytes_transferred;
+    auto cycle_bytes_transferred = RTT_PACKETS_PER_CYCLE* packetSize;
+    auto cycle_Mbits_transferred = 8000000 * cycle_bytes_transferred;
     using FpSeconds = std::chrono::duration<float, std::chrono::seconds::period>;
 
 
@@ -254,9 +253,9 @@ void Client::measureRTT(size_t packetSize) {
             }
 
             if (msg[0] == 0) {//Todo check if needed
-                memset(msg, 1, WARMPUP_PACKET_SIZE);
+                memset(msg, 1, packetSize);
             } else {
-                memset(msg, 0, WARMPUP_PACKET_SIZE);
+                memset(msg, 0, packetSize);
             }
 
         }
@@ -266,7 +265,7 @@ void Client::measureRTT(size_t packetSize) {
         std::chrono::high_resolution_clock::duration cycleTime = (cycleEndTime - cycleStartTime);
         auto fptsecs = FpSeconds(cycleTime);
         auto totalTimeSecs = fptsecs.count();
-        auto cycleThroughput = Mbits_transferred / totalTimeSecs;
+        auto cycleThroughput = cycle_Mbits_transferred / totalTimeSecs;
         if (cycleThroughput > max_rate) {
             max_rate = cycleThroughput;
         }
@@ -286,7 +285,7 @@ void Client::measureRTT(size_t packetSize) {
 //    auto throughput = Mbits_transferred / totalTimeSecs;
 //
 //    if (DEBUG) { std::cout << "throughput is: " << throughput << " Megabits / second" << std::endl; }
-    if (DEBUG) { std::cout << "Maximal throughput is: " << max_rate << " Megabits / second" << std::endl; }
+    if (DEBUG) { std::cout << "Packet size: " << packetSize << "\t Maximal throughput is: " << max_rate << "\tMegabits / second" << std::endl; }
 
 }
 
