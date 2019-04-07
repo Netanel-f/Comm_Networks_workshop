@@ -5,6 +5,7 @@
 
 #include "shared.h"
 
+#define THROUGPUT_FORMAT "%d\t%f\t%s\n"
 
 class Client {
     int serverfd;
@@ -224,8 +225,8 @@ void Client::measureRTT(size_t packetSize) {
     float max_rate = 0.0;
 
     // init calculations
-    auto cycle_bytes_transferred = RTT_PACKETS_PER_CYCLE* packetSize;
-    auto cycle_Mbits_transferred = BYTES_TO_BITS * cycle_bytes_transferred;
+    auto cycle_bytes_transferred = 2* RTT_PACKETS_PER_CYCLE * packetSize;
+    auto cycle_Mbits_transferred = cycle_bytes_transferred / BYTES_TO_MEGABITS;
     using FpSeconds = std::chrono::duration<float, std::chrono::seconds::period>;
 
 
@@ -265,7 +266,8 @@ void Client::measureRTT(size_t packetSize) {
         }
     }
 
-    if (DEBUG) { std::cout << "Packet size: " << packetSize << "\t Maximal throughput is: " << max_rate << "\tMegabits / second" << std::endl; }
+//    if (DEBUG) { std::cout << "Packet size: " << packetSize << "\t Maximal throughput is: " << max_rate << "\tMegabits / second" << std::endl; }
+    printf(THROUGPUT_FORMAT, (int)packetSize, max_rate, "Megabits / second");
 
 }
 
@@ -280,6 +282,7 @@ void Client::print_error(const std::string& function_name, int error_number) {
 int main(int argc, char const *argv[]) {
     Client client = Client(argv[1]);
     client.warmupLatency();
+
 
     for (size_t packetSize = 1; packetSize <= 1024; packetSize = packetSize<<1) {
         client.measureRTT(packetSize);
