@@ -4,7 +4,7 @@
 class Server {
     int welcomeSocket;
     int clientfd;
-    char readBuf[WARMPUP_PACKET_SIZE + 1];
+    char readBuf[WARMPUP_PACKET_SIZE + 1] = "0";
 
 
 public:
