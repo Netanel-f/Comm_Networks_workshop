@@ -1,16 +1,13 @@
 #include <cstring>
 #include <string>
-//#include <chrono>
 #include <vector>
 #include <numeric>
 
 #include "shared.h"
 
 
-
 class Client {
     int serverfd;
-
     char readBuf[WARMPUP_PACKET_SIZE + 1] = "0";
 
 public:
@@ -19,7 +16,7 @@ public:
 
     //// client actions
     void killClient();
-    void warmup(size_t packetSize);
+    void warmup(size_t packetSize); //TODO delete me
     void measureRTT(size_t packetSize);
     void warmupLatency();
     void print_error(const std::string& function_name, int error_number);
@@ -55,7 +52,6 @@ Client::Client(const char * serverIP) {
 }
 
 void Client::killClient() {
-    if (DEBUG) { std::cout << "Bye, World!" << std::endl; }
     int retVal = close(serverfd);
     if (DEBUG) { std::cout << "close output: " << retVal << std::endl; }
 
@@ -76,26 +72,26 @@ void Client::warmupLatency() {
     size_t msg_size = WARMPUP_PACKET_SIZE;
 
     while (keepWarmUp) {
-        if (DEBUG) { std::cout << "warmupLatency cycle #" << cycles_counter << std::endl; }
+        if (DEBUG) { std::cout << "Latency cycle #" << cycles_counter << std::endl; }
 
         //take time
         startTime = std::chrono::high_resolution_clock::now();
 
         ssize_t retVal = send(this->serverfd, &msg, msg_size, 0);
-        if (DEBUG) { std::cout << "warmup sent size: " << msg_size << std::endl; }
+        if (DEBUG) { std::cout << "Latency-sent size: " << msg_size << std::endl; }
         if (retVal != msg_size) {
             print_error("send() failed", errno);
         }
 
         retVal = recv(this->serverfd, this->readBuf, msg_size, 0);
-        if (DEBUG) { std::cout << "warmup recieved size: " << retVal << std::endl; }
+        if (DEBUG) { std::cout << "Latency-received size: " << retVal << std::endl; }
         if (retVal < 0) {
             print_error("recv() failed", errno);
         }
 
         endTime = std::chrono::high_resolution_clock::now();
 
-        if (msg[0] == 0) {//Todo check if needed
+        if (msg[0] == 0) { //Todo check if needed
             memset(msg, 1, WARMPUP_PACKET_SIZE);
         } else {
             memset(msg, 0, WARMPUP_PACKET_SIZE);
@@ -112,7 +108,6 @@ void Client::warmupLatency() {
         auto currentRTT = 0.8 * rtt + 0.2 * currentCycleDuration;
 
         if (cycles_counter > LATENCY_MIN_WARM_PACKETS) {
-            // TODO need to check average
             // convergence detection: a minimal number to start with,
             // followed by iterations until the average changes less than 1% between iterations...
             if (currentRTT - rtt < (rtt / 100)) {
@@ -124,6 +119,7 @@ void Client::warmupLatency() {
     }
 }
 
+//TODO delete me
 void Client::warmup(size_t packetSize) {
     /* Set chrono clocks*/
     std::chrono::high_resolution_clock clock;
@@ -225,12 +221,11 @@ void Client::measureRTT(size_t packetSize) {
     /* Set chrono clocks*/
     std::chrono::high_resolution_clock::time_point cycleStartTime;
     std::chrono::high_resolution_clock::time_point cycleEndTime;
-//    std::vector<std::chrono::high_resolution_clock::duration> durations;
     float max_rate = 0.0;
 
     // init calculations
     auto cycle_bytes_transferred = RTT_PACKETS_PER_CYCLE* packetSize;
-    auto cycle_Mbits_transferred = 8000000 * cycle_bytes_transferred;
+    auto cycle_Mbits_transferred = BYTES_TO_BITS * cycle_bytes_transferred;
     using FpSeconds = std::chrono::duration<float, std::chrono::seconds::period>;
 
 
@@ -261,7 +256,6 @@ void Client::measureRTT(size_t packetSize) {
         }
 
         cycleEndTime  = std::chrono::high_resolution_clock::now();
-//        durations.push_back(cycleEndTime - cycleStartTime;)
         std::chrono::high_resolution_clock::duration cycleTime = (cycleEndTime - cycleStartTime);
         auto fptsecs = FpSeconds(cycleTime);
         auto totalTimeSecs = fptsecs.count();
@@ -271,20 +265,6 @@ void Client::measureRTT(size_t packetSize) {
         }
     }
 
-//    auto bytes_transferred = RTT_NUM_OF_CYCLES * RTT_PACKETS_PER_CYCLE* packetSize;
-//    auto Mbits_transferred = 80000000 * bytes_transferred;
-
-//    auto total_time = std::accumulate(durations.begin(), durations.end(),
-//                                      std::chrono::high_resolution_clock::duration(0));
-
-//    using FpSeconds = std::chrono::duration<float, std::chrono::seconds::period>;
-//    auto fptsecs = FpSeconds(total_time);
-
-//    auto totalTimeSecs = fptsecs.count();
-//
-//    auto throughput = Mbits_transferred / totalTimeSecs;
-//
-//    if (DEBUG) { std::cout << "throughput is: " << throughput << " Megabits / second" << std::endl; }
     if (DEBUG) { std::cout << "Packet size: " << packetSize << "\t Maximal throughput is: " << max_rate << "\tMegabits / second" << std::endl; }
 
 }
@@ -294,13 +274,12 @@ void Client::print_error(const std::string& function_name, int error_number) {
     exit(EXIT_FAILURE);
 }
 
+
+// TODO fix print as requesed
+// TODO implement rate units Mbps Gbps....
 int main(int argc, char const *argv[]) {
     Client client = Client(argv[1]);
     client.warmupLatency();
-//    client.warmup(WARMPUP_PACKET_SIZE);
-//    for (size_t packetSize = 1; packetSize <= 1024; packetSize = packetSize<<1) {
-//        client.warmup(packetSize);
-//    }
 
     for (size_t packetSize = 1; packetSize <= 1024; packetSize = packetSize<<1) {
         client.measureRTT(packetSize);
