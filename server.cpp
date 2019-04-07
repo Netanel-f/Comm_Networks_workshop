@@ -1,27 +1,20 @@
 #include "shared.h"
 
 
-void print_error(const std::string& function_name, int error_number) {
-    printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
-    exit(EXIT_FAILURE);
-}
-
 class Server {
     int welcomeSocket;
     int clientfd;
-
     char readBuf[WARMPUP_PACKET_SIZE + 1];
 
 
 public:
     //// C-tor
     Server();
-
-    void warmup_echo_back(bool * keepEcho);
     void echo();
+    void warmup_echo_back(bool * keepEcho);
+    void print_error(const std::string& function_name, int error_number);
     //// server actions
     void killServer();
-
 private:
 
 };
@@ -67,11 +60,17 @@ Server::Server() {
 }
 
 void Server::killServer() {
-    std::cout << "Bye, World!" << std::endl;
+    // close client socket
     int retVal = close(this->clientfd);
-    std::cout << "close output: " << retVal << std::endl;
+    if (retVal < 0) {
+        print_error("close() failed.", errno);
+    }
+
+    // close welcome socket
     retVal = close(this->welcomeSocket);
-    std::cout << "close output: " << retVal << std::endl;
+    if (retVal < 0) {
+        print_error("close() failed.", errno);
+    }
 
 }
 
@@ -110,7 +109,7 @@ void Server::warmup_echo_back(bool * keepEcho) {
 
 void Server::echo() {
     bool keepEcho = true;
-    int echoCounter = 0;
+    int echoCounter = 0;    // TODO DELETE DEBUG
     while (keepEcho) {
         ssize_t retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
         if (DEBUG) { std::cout << "warmup recieved size: " << retVal<< std::endl; }
@@ -118,34 +117,35 @@ void Server::echo() {
             print_error("recv() failed", errno);
         }
         if (retVal == 0) {
+            // means we didn't read anything from client - we assume client closed the socket.
+            // from man recv():
+            // When  a  stream socket peer has performed an orderly shutdown,
+            // the return value will be 0 (the traditional "end-of-file" return).
+
             keepEcho = false;
             if (DEBUG) { std::cout << "received total of " << echoCounter << std::endl; }
             return;
         }
-        echoCounter++;
+        echoCounter++;    // TODO DELETE DEBUG
         retVal = send(this->clientfd, this->readBuf, (size_t) retVal, 0);
-        if (DEBUG) { std::cout << "warmup sent size: " << retVal << std::endl; }
         if (retVal < 0) {
             print_error("send() failed", errno);
         }
+        if (DEBUG) { std::cout << "warmup sent size: " << retVal << std::endl; }
     }
 
 }
 
-int main() {
+void Server::print_error(const std::string& function_name, int error_number) {
+    printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
+    exit(EXIT_FAILURE);
+}
 
+int main() {
+    // setup server, echo back client's messages when done, kill server.
     Server server =  Server();
     server.echo();
-//    bool keepEcho = true;
-//    int echoCounter = 0;
-//    while (keepEcho) {
-//        if (DEBUG) { std::cout << "warmup_echo_back #" << echoCounter << std::endl; }
-//        server.warmup_echo_back(&keepEcho);
-//        echoCounter++;
-//    }
-
     server.killServer();
 
-
-    return 0;
+    return EXIT_SUCCESS;
 }

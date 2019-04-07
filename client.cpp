@@ -7,10 +7,6 @@
 #include "shared.h"
 
 
-void print_error(const std::string& function_name, int error_number) {
-    printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
-    exit(EXIT_FAILURE);
-}
 
 class Client {
     int serverfd;
@@ -24,9 +20,9 @@ public:
 
     //// client actions
     void killClient();
-//    void warmup();
     void warmup(size_t packetSize);
     void warmupLatency();
+    void print_error(const std::string& function_name, int error_number);
 
 private:
 
@@ -214,6 +210,11 @@ void Client::warmup(size_t packetSize) {
 //    }
 }
 
+void Client::print_error(const std::string& function_name, int error_number) {
+    printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
+    exit(EXIT_FAILURE);
+}
+
 int main(int argc, char const *argv[]) {
     Client client = Client(argv[1]);
     client.warmupLatency();
@@ -222,5 +223,5 @@ int main(int argc, char const *argv[]) {
 //        client.warmup(packetSize);
 //    }
     client.killClient();
-    return 0;
+    return EXIT_SUCCESS;
 }
