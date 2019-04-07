@@ -113,6 +113,7 @@ void Server::echo() {
     int echoCounter = 0;
     while (keepEcho) {
         ssize_t retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+        if (DEBUG) { std::cout << "warmup recieved size: " << retVal<< std::endl; }
         if (retVal < 0) {
             print_error("recv() failed", errno);
         }
@@ -122,7 +123,8 @@ void Server::echo() {
             return;
         }
         echoCounter++;
-        retVal = send(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
+        retVal = send(this->clientfd, this->readBuf, (size_t) retVal, 0);
+        if (DEBUG) { std::cout << "warmup sent size: " << retVal << std::endl; }
         if (retVal < 0) {
             print_error("send() failed", errno);
         }
