@@ -110,10 +110,12 @@ void Server::warmup_echo_back(bool * keepEcho) {
 void Server::echo() {
     bool keepEcho = true;
     int echoCounter = 0;    // TODO DELETE DEBUG
+    int test = 1;
+
     while (keepEcho) {
         // todo do we need to clean the
         ssize_t retVal = recv(this->clientfd, this->readBuf, (size_t) WARMPUP_PACKET_SIZE, 0);
-        if (DEBUG) { std::cout << "warmup recieved size: " << retVal<< std::endl; }
+        if (DEBUG) { std::cout << "msg received size: " << retVal<< std::endl; }
         if (retVal < 0) {
             print_error("recv() failed", errno);
         }
@@ -128,11 +130,21 @@ void Server::echo() {
             return;
         }
         echoCounter++;    // TODO DELETE DEBUG
+        if (test != this->readBuf[0]) {
+            if (DEBUG) { std::cout << "~~~~~~~~~~ERRRROR " << std::endl; }
+        }
+        // TODO DELETE ME
+        if (this->readBuf[0] == 0) {
+            test = 1;
+        } else {
+            test = 0;
+        }
+
         retVal = send(this->clientfd, this->readBuf, (size_t) retVal, 0);
         if (retVal < 0) {
             print_error("send() failed", errno);
         }
-        if (DEBUG) { std::cout << "warmup sent size: " << retVal << std::endl; }
+        if (DEBUG) { std::cout << "msg sent size: " << retVal << std::endl; }
     }
 
 }
@@ -145,7 +157,6 @@ void Server::print_error(const std::string& function_name, int error_number) {
 int main() {
     // setup server, echo back client's messages when done, kill server.
     Server server =  Server();
-    server.echo();
     server.echo();
     server.killServer();
 
