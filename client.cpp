@@ -191,10 +191,13 @@ void Client::measure_throughput(size_t packetSize) {
 //    printf(THROUGPUT_FORMAT, (int)packetSize, max_rate, "Megabits / second");
     std::string rate_unit;
     if (max_rate > GIGABIT_IN_BITS) {
+        max_rate = max_rate / GIGABIT_IN_BITS;
         rate_unit = "Gbps";
     } else if (max_rate > MEGABIT_IN_BITS) {
         rate_unit = "Mbps";
+        max_rate = max_rate / MEGABIT_IN_BITS;
     } else if (max_rate > KILOBIT_IN_BITS) {
+        max_rate = max_rate / KILOBIT_IN_BITS;
         rate_unit = "Kbps";
     } else {
         rate_unit = "bps";
