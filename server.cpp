@@ -157,7 +157,7 @@ void Server::print_error(const std::string& function_name, int error_number) {
 int main() {
     // setup server, echo back client's messages when done, kill server.
     Server server =  Server();
-    server.echo();
+    server.echo();  // TODO check if need to call echo again.
     server.killServer();
 
     return EXIT_SUCCESS;
