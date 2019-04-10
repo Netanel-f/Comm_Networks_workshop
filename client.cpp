@@ -5,7 +5,8 @@
 
 #include "shared.h"
 
-#define THROUGPUT_FORMAT "%d\t%f\t%s\n"
+#define THROUGPUT_FORMAT "%d\t%f\t%s\t"
+#define LATENCY_FORMAT "%f\t%s\n"
 
 class Client {
     int serverfd;
@@ -18,7 +19,10 @@ public:
     //// client actions
     void killClient();
     void warmup(size_t packetSize); //TODO delete me
+    void warmup(); //TODO delete me
     void measureRTT(size_t packetSize);
+    void measure_throughput(size_t packetSize);
+    void measure_latency(size_t packetSize);
     void warmupLatency();
     void print_error(const std::string& function_name, int error_number);
 
@@ -60,6 +64,7 @@ void Client::killClient() {
 void Client::warmupLatency() {
     std::chrono::high_resolution_clock::time_point startTime;
     std::chrono::high_resolution_clock::time_point endTime;
+
 
     bool keepWarmUp = true;
     int cycles_counter = 0;
@@ -115,6 +120,78 @@ void Client::warmupLatency() {
                 keepWarmUp = false;
             }
         }
+        rtt = currentRTT;
+        if (DEBUG) { std::cout << "rtt is: " << rtt.count() << " milliseconds." << std::endl; }
+    }
+}
+
+void Client::warmup() {
+    /* Set chrono clocks*/
+    std::chrono::high_resolution_clock::time_point startTime;
+    std::chrono::high_resolution_clock::time_point endTime;
+    std::vector<std::chrono::high_resolution_clock::duration> durations;
+
+    bool keepWarmUp = true;
+    int cycles_counter = 0;
+
+    using FpMilliseconds = std::chrono::duration<float, std::chrono::milliseconds::period>;
+    auto rtt = FpMilliseconds(std::chrono::high_resolution_clock::duration(0));
+
+    //create message in size
+    char msg[WARMPUP_PACKET_SIZE];
+    memset(msg, 1, WARMPUP_PACKET_SIZE);
+    size_t msg_size = WARMPUP_PACKET_SIZE;
+
+    while (keepWarmUp) {
+        if (DEBUG) { std::cout << "Latency cycle #" << cycles_counter << std::endl; }
+
+        //take time
+        startTime = std::chrono::high_resolution_clock::now();
+
+        ssize_t retVal = send(this->serverfd, &msg, msg_size, 0);
+        if (DEBUG) { std::cout << "Latency-sent size: " << msg_size << std::endl; }
+        if (retVal != msg_size) {
+            print_error("send() failed", errno);
+        }
+
+        retVal = recv(this->serverfd, this->readBuf, msg_size, 0);
+        if (DEBUG) { std::cout << "Latency-received size: " << retVal << std::endl; }
+        if (retVal < 0) {
+            print_error("recv() failed", errno);
+        }
+
+        endTime = std::chrono::high_resolution_clock::now();
+
+        if (msg[0] == 0) { //Todo check if needed
+            memset(msg, 1, WARMPUP_PACKET_SIZE);
+        } else {
+            memset(msg, 0, WARMPUP_PACKET_SIZE);
+        }
+        std::chrono::high_resolution_clock::duration currentCycleDuration = endTime - startTime;
+        durations.push_back(currentCycleDuration);
+
+
+        if (cycles_counter == 0) {
+            rtt = currentCycleDuration;
+        }
+
+        cycles_counter++;
+
+        // calculating weighted average of rtt.
+        auto currentRTT = 0.8 * rtt + 0.2 * currentCycleDuration;
+
+
+        auto total_time = std::accumulate(durations.begin(), durations.end(),
+                                          std::chrono::high_resolution_clock::duration(0));
+
+        auto total_time_seconds = std::chrono::duration_cast<std::chrono::seconds>(total_time).count();
+
+        if ((total_time_seconds > 20) && (currentRTT - rtt < (rtt / 100))) {
+            // convergence detection: a minimal number to start with,
+            // followed by iterations until the average changes less than 1% between iterations...
+            keepWarmUp = false;
+        }
+
         rtt = currentRTT;
         if (DEBUG) { std::cout << "latency is: " << rtt.count() << " milliseconds." << std::endl; }
     }
@@ -271,22 +348,125 @@ void Client::measureRTT(size_t packetSize) {
 
 }
 
+
+void Client::measure_throughput(size_t packetSize) {
+    /* Set chrono clocks*/
+    std::chrono::high_resolution_clock::time_point cycleStartTime;
+    std::chrono::high_resolution_clock::time_point cycleEndTime;
+    float max_rate = 0.0;
+
+    // init calculations
+    auto cycle_bytes_transferred = 2* RTT_PACKETS_PER_CYCLE * packetSize;
+    auto cycle_Mbits_transferred = cycle_bytes_transferred / BYTES_TO_MEGABITS;
+    using FpSeconds = std::chrono::duration<float, std::chrono::seconds::period>;
+
+
+    /* Init the packet message to send*/
+    char msg[packetSize];
+    memset(msg, 1, packetSize);
+
+    for (int cycleIndex = 0; cycleIndex < RTT_NUM_OF_CYCLES; cycleIndex++) {
+        cycleStartTime = std::chrono::high_resolution_clock::now();
+
+        for (int packetIndex = 0; packetIndex < RTT_PACKETS_PER_CYCLE; packetIndex++) {
+            ssize_t retVal = send(this->serverfd, &msg, packetSize, 0);
+            if (retVal != packetSize) {
+                print_error("send() failed", errno);
+            }
+
+            retVal = recv(this->serverfd, this->readBuf, packetSize, 0);
+            if (retVal < 0) {
+                print_error("recv() failed", errno);
+            }
+
+            if (msg[0] == 0) {//Todo check if needed
+                memset(msg, 1, packetSize);
+            } else {
+                memset(msg, 0, packetSize);
+            }
+
+        }
+
+        cycleEndTime  = std::chrono::high_resolution_clock::now();
+        std::chrono::high_resolution_clock::duration cycleTime = (cycleEndTime - cycleStartTime);
+        auto fptsecs = FpSeconds(cycleTime);
+        auto totalTimeSecs = fptsecs.count();
+        auto cycleThroughput = cycle_Mbits_transferred / totalTimeSecs;
+        if (cycleThroughput > max_rate) {
+            max_rate = cycleThroughput;
+        }
+    }
+
+//    if (DEBUG) { std::cout << "Packet size: " << packetSize << "\t Maximal throughput is: " << max_rate << "\tMegabits / second" << std::endl; }
+    printf(THROUGPUT_FORMAT, (int)packetSize, max_rate, "Megabits / second");
+
+}
+
+
+
+void Client::measure_latency(size_t packetSize) {
+    std::chrono::high_resolution_clock::time_point startTime;
+    std::chrono::high_resolution_clock::time_point endTime;
+
+
+    using FpMilliseconds = std::chrono::duration<float, std::chrono::milliseconds::period>;
+
+    //create message in size
+    char msg[packetSize];
+    memset(msg, 1, packetSize);
+
+    //take time
+    startTime = std::chrono::high_resolution_clock::now();
+
+    ssize_t retVal = send(this->serverfd, &msg, packetSize, 0);
+    if (DEBUG) { std::cout << "Latency-sent size: " << packetSize << std::endl; }
+    if (retVal != packetSize) {
+        print_error("send() failed", errno);
+    }
+
+    retVal = recv(this->serverfd, this->readBuf, packetSize, 0);
+    if (DEBUG) { std::cout << "Latency-received size: " << retVal << std::endl; }
+    if (retVal < 0) {
+        print_error("recv() failed", errno);
+    }
+
+    endTime = std::chrono::high_resolution_clock::now();
+
+//    std::chrono::high_resolution_clock::duration currentCycleDuration = endTime - startTime;
+    auto rtt = FpMilliseconds(std::chrono::high_resolution_clock::duration(endTime - startTime));
+    auto latency = rtt.count() / 2;
+    if (DEBUG) { std::cout << "latency is: " << latency << " milliseconds." << std::endl; }
+
+    printf(LATENCY_FORMAT, latency, "milliseconds");
+}
+
+
+
+
 void Client::print_error(const std::string& function_name, int error_number) {
     printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
     exit(EXIT_FAILURE);
 }
 
 
-// TODO fix print as requesed
+// TODO fix print as requested
 // TODO implement rate units Mbps Gbps....
 int main(int argc, char const *argv[]) {
     Client client = Client(argv[1]);
-    client.warmupLatency();
 
+    client.warmup();    // warm up until latency converges
 
-    for (size_t packetSize = 1; packetSize <= 1024; packetSize = packetSize<<1) {
-        client.measureRTT(packetSize);
+    for (size_t packetSize = 1; packetSize <= 1024; packetSize = packetSize << 1) {
+        client.measure_throughput(packetSize);
+        client.measure_latency(packetSize);
     }
+
+
+//    client.warmupLatency();
+
+//    for (size_t packetSize = 1; packetSize <= 1024; packetSize = packetSize<<1) {
+//        client.measureRTT(packetSize);
+//    }
 
     client.killClient();
     return EXIT_SUCCESS;
