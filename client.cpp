@@ -223,14 +223,17 @@ void Client::measure_latency(size_t packetSize) {
 
 
 /**
- * close the open sockets.
+ * close the open socket towards server.
  */
 void Client::kill_client() {
-    int retVal = close(server_fd);
-    if (DEBUG) { std::cout << "close output: " << retVal << std::endl; }
+    close(server_fd);
 }
 
-
+/**
+ * This method will print the function that raised the given error number.
+ * @param function_name function that caused error
+ * @param error_number errno that been raised.
+ */
 void Client::print_error(const std::string& function_name, int error_number) {
     printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
     exit(EXIT_FAILURE);
@@ -238,16 +241,20 @@ void Client::print_error(const std::string& function_name, int error_number) {
 
 
 int main(int argc, char const *argv[]) {
+
+    /* Create client object and connect to given server-ip */
     Client client = Client(argv[1]);
 
-    client.warm_up();    // warm up until latency converges
+    /* warm up until latency converges */
+    client.warm_up();
 
-    for (size_t packetSize = 1; packetSize <= 1024; packetSize = packetSize << 1) {
+    /* Measure throughput and latency , for exponential series of message sizes */
+    for (size_t packetSize = 1; packetSize <= 1024; packetSize = packetSize << 1u) {
         client.measure_throughput(packetSize);
         client.measure_latency(packetSize);
     }
 
-
+    /* Close client and disconnect from server */
     client.kill_client();
     return EXIT_SUCCESS;
 }
