@@ -6,10 +6,10 @@ CFLAGS = -Wall -std=c++11 -g $(INCS)
 CXXFLAGS = -Wall -std=c++11 -g $(INCS)
 
 
-TAR = tar.gz
-TARFLAGS = uzf
+TAR = tar
+TARFLAGS = -czvf
 TARNAME = 201209806.tar.gz
-TARSRCS = ${ALL} ${EXE} Makefile README
+TARSRCS = ${ALL} ${EXE} Makefile
 
 CLIENT = shared.h client.cpp
 SERVER = shared.h server.cpp
