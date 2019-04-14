@@ -113,16 +113,25 @@ void Server::echo() {
 
 }
 
+/**
+ * This method will print the function that raised the given error number.
+ * @param function_name function that caused error
+ * @param error_number errno that been raised.
+ */
 void Server::print_error(const std::string& function_name, int error_number) {
     printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
     exit(EXIT_FAILURE);
 }
 
 int main() {
-    // setup server, echo back client's messages when done, kill server.
-    Server server =  Server();
-    server.echo();  // TODO check if need to call echo again.
-    server.killServer();
 
+    /* Create server object and wait for client to connect */
+    Server server =  Server();
+
+    /* Echo back client's messages */
+    server.echo();
+
+    /* Close open sockets and close server */
+    server.killServer();
     return EXIT_SUCCESS;
 }
