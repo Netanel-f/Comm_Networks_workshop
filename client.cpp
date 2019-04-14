@@ -9,11 +9,13 @@
 #define THROUGHPUT_FORMAT "%d\t%f\t%s\t"
 #define LATENCY_FORMAT "%f\t%s\n"
 
+using namespace std::chrono;
+using fp_milliseconds = std::chrono::duration<double, std::chrono::milliseconds::period>;
+using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
 
-using FpMilliseconds = std::chrono::duration<double, std::chrono::milliseconds::period>;
-//using FpMilliseconds = std::chrono::duration<float, std::chrono::milliseconds::period>;
-using FpSeconds = std::chrono::duration<double, std::chrono::seconds::period>;
-
+/**
+ * Constructor of Client class.
+ */
 class Client {
     int server_fd;
     char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
@@ -33,29 +35,26 @@ private:
 
 };
 
-
+/**
+ * Thie method will create Client Object and will connect the client to server
+ * @param serverIP - the server destination ipv4 format.
+ */
 Client::Client(const char * serverIP) {
     // setup sockets and structs
     struct sockaddr_in serverAddress;
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) {
-        print_error("socket() error", errno);
-    }
+    if (server_fd < 0) { print_error("socket() error", errno); }
 
     memset(&serverAddress, 0, sizeof(serverAddress));
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(PORT_NUMBER);
 
     int retVal = inet_pton(AF_INET, serverIP, &serverAddress.sin_addr);
-    if (retVal <= 0) {
-        print_error("inet_pton()", errno);
-    }
+    if (retVal <= 0) { print_error("inet_pton()", errno); }
 
     retVal = connect(server_fd, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
-    if (retVal != 0) {
-        print_error("connect()", errno);
-    }
+    if (retVal != 0) { print_error("connect()", errno); }
     // clear read_buffer
     bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);
 }
@@ -70,7 +69,7 @@ void Client::warm_up() {
     bool keepWarmUp = true;
     int cycles_counter = 0; // TODO remove
 
-    auto rtt = FpMilliseconds(std::chrono::high_resolution_clock::duration(0));
+    auto rtt = fp_milliseconds(std::chrono::high_resolution_clock::duration(0));
 
     std::chrono::high_resolution_clock::duration currentCycleDuration;
 
@@ -136,7 +135,7 @@ void Client::measure_throughput(size_t packetSize) {
 //    auto cycle_Mbits_transferred = cycle_bytes_transferred / BYTES_TO_MEGABITS;
     auto cycle_bits_transferred = cycle_bytes_transferred * BYTES_TO_BITS;
 
-//    using FpSeconds = std::chrono::duration<float, std::chrono::seconds::period>;
+//    using fp_seconds = std::chrono::duration<float, std::chrono::seconds::period>;
 
 
     /* Init the packet message to send*/
@@ -161,7 +160,7 @@ void Client::measure_throughput(size_t packetSize) {
         cycleEndTime  = std::chrono::high_resolution_clock::now();
         cycleTime = (cycleEndTime - cycleStartTime);
 
-        auto fptsecs = FpSeconds(cycleTime);
+        auto fptsecs = fp_seconds(cycleTime);
         auto totalTimeSecs = fptsecs.count();
 
 //        auto cycleThroughput = cycle_Mbits_transferred / totalTimeSecs;
@@ -197,7 +196,7 @@ void Client::measure_latency(size_t packetSize) {
     std::chrono::high_resolution_clock::time_point end_time;
 
 
-//    using FpMilliseconds = std::chrono::duration<float, std::chrono::milliseconds::period>;
+//    using fp_milliseconds = std::chrono::duration<float, std::chrono::milliseconds::period>;
 
     //create message in size
     char msg[packetSize];
@@ -221,7 +220,7 @@ void Client::measure_latency(size_t packetSize) {
     end_time = std::chrono::high_resolution_clock::now();
 
 //    std::chrono::high_resolution_clock::duration currentCycleDuration = endTime - startTime;
-    auto rtt = FpMilliseconds(std::chrono::high_resolution_clock::duration(end_time - start_time));
+    auto rtt = fp_milliseconds(std::chrono::high_resolution_clock::duration(end_time - start_time));
     auto latency = rtt.count() / 2;
     if (DEBUG) { std::cout << "latency is: " << latency << " milliseconds." << std::endl; }
 
