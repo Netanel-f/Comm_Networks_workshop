@@ -1,6 +1,3 @@
-//
-// Created by netanel on 30/03/2019.
-//
 
 #ifndef COMM_NETS_SHARED_H
 #define COMM_NETS_SHARED_H
@@ -31,11 +28,7 @@
 #define MEGABIT_IN_BITS 1000000
 #define GIGABIT_IN_BITS 1000000000
 
-#define THROUGHPUT_FORMAT "%ld\t%f\t%s\t"
-#define LATENCY_FORMAT "%f\t%s\n"
 #define RESULTS_FORMAT "%ld\t%f\t%s\t%f\t%s\n"
-
-#define DEBUG false  // TODO delete before submission
 
 
 #endif //COMM_NETS_SHARED_H
