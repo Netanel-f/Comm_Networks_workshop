@@ -41,23 +41,23 @@ Server::Server() {
     serverAddress.sin_addr.s_addr = INADDR_ANY;
     serverAddress.sin_port = htons(PORT_NUMBER);
 
-    int retVal = bind(welcome_socket, (struct sockaddr*) &serverAddress, sizeof(serverAddress));
-    if (retVal < 0) {
+    int ret_value = bind(welcome_socket, (struct sockaddr*) &serverAddress, sizeof(serverAddress));
+    if (ret_value < 0) {
         print_error("bind", errno);
     }
 
-    retVal = listen(welcome_socket, MAX_INCOMING_QUEUE);
+    ret_value = listen(welcome_socket, MAX_INCOMING_QUEUE);
 
-    if (retVal < 0) { print_error("listen", errno); }
+    if (ret_value < 0) { print_error("listen", errno); }
 
     // accepting socket - server will enter BLOCKING STATE until client connects.
-    retVal = accept(welcome_socket, nullptr, nullptr);
+    ret_value = accept(welcome_socket, nullptr, nullptr);
 
-    if (retVal < 0) {
+    if (ret_value < 0) {
         print_error("accept", errno);
     }
 
-    this->client_fd = retVal;
+    this->client_fd = ret_value;
 
     bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);
 }
@@ -67,14 +67,14 @@ Server::Server() {
  */
 void Server::killServer() {
     // close client socket
-    int retVal = close(this->client_fd);
-    if (retVal < 0) {
+    int ret_value = close(this->client_fd);
+    if (ret_value < 0) {
         print_error("close() failed.", errno);
     }
 
     // close welcome socket
-    retVal = close(this->welcome_socket);
-    if (retVal < 0) {
+    ret_value = close(this->welcome_socket);
+    if (ret_value < 0) {
         print_error("close() failed.", errno);
     }
 
@@ -84,31 +84,31 @@ void Server::killServer() {
  * This method will echo back the client with the message it sent.
  */
 void Server::echo() {
-    int echoCounter = 0;    // TODO DELETE DEBUG
+    int echo_counter = 0;    // TODO DELETE DEBUG
 
     while (true) {
-        // keep loop until client closed the socket.
-        ssize_t retVal = recv(this->client_fd, this->read_buffer, (size_t) WARMPUP_PACKET_SIZE, 0);
-        if (DEBUG) { std::cout << "msg received size: " << retVal<< std::endl; }
-        if (retVal < 0) {
+        /* keep loop until client closed the socket. */
+        ssize_t ret_value = recv(this->client_fd, this->read_buffer, (size_t) WARMPUP_PACKET_SIZE, 0);
+        if (DEBUG) { std::cout << "msg received size: " << ret_value<< std::endl; }
+        if (ret_value < 0) {
             print_error("recv() failed", errno);
         }
-        if (retVal == 0) {
+        if (ret_value == 0) {
             // Means we didn't read anything from client - we assume client closed the socket.
-            // from man recv():
+            // Quote from recv() manual:
             // When a stream socket peer has performed an orderly shutdown,
             // the return value will be 0 (the traditional "end-of-file" return).
-            if (DEBUG) { std::cout << "received total of " << echoCounter << " packets" << std::endl; }
+            if (DEBUG) { std::cout << "received total of " << echo_counter << " packets" << std::endl; }
             return;
         }
 
-        echoCounter++;    // TODO DELETE DEBUG
+        echo_counter++;    // TODO DELETE DEBUG
 
-        retVal = send(this->client_fd, this->read_buffer, (size_t) retVal, 0);
-        if (retVal < 0) {
+        ret_value = send(this->client_fd, this->read_buffer, (size_t) ret_value, 0);
+        if (ret_value < 0) {
             print_error("send() failed", errno);
         }
-        if (DEBUG) { std::cout << "msg sent size: " << retVal << std::endl; }
+        if (DEBUG) { std::cout << "msg sent size: " << ret_value << std::endl; }
     }
 
 }

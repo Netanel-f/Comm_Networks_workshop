@@ -26,8 +26,8 @@ public:
 
     //// client actions
     void warm_up(); //TODO delete me
-    void measure_throughput(size_t packetSize);
-    void measure_latency(size_t packetSize);
+    void measure_throughput(size_t packet_size);
+    void measure_latency(size_t packet_size);
     void kill_client();
 
 private:
@@ -50,11 +50,11 @@ Client::Client(const char * serverIP) {
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(PORT_NUMBER);
 
-    int retVal = inet_pton(AF_INET, serverIP, &serverAddress.sin_addr);
-    if (retVal <= 0) { print_error("inet_pton()", errno); }
+    int ret_value = inet_pton(AF_INET, serverIP, &serverAddress.sin_addr);
+    if (ret_value <= 0) { print_error("inet_pton()", errno); }
 
-    retVal = connect(server_fd, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
-    if (retVal != 0) { print_error("connect()", errno); }
+    ret_value = connect(server_fd, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
+    if (ret_value != 0) { print_error("connect()", errno); }
 
     bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
 }
@@ -72,7 +72,7 @@ void Client::warm_up() {
 
     auto rtt = fp_milliseconds(steady_clock::duration(0));
 
-    steady_clock::duration currentCycleDuration;
+    steady_clock::duration current_cycle_duration;
 
     /* Create message in pre-defined warm-up packet size */
     char msg[WARMPUP_PACKET_SIZE];
@@ -86,31 +86,31 @@ void Client::warm_up() {
         //take time
         cycle_start_time = steady_clock::now();
 
-        ssize_t retVal = send(this->server_fd, &msg, msg_size, 0);
+        ssize_t ret_value = send(this->server_fd, &msg, msg_size, 0);
         if (DEBUG) { std::cout << "Latency-sent size: " << msg_size << std::endl; }
-        if (retVal != msg_size) {
+        if (ret_value != msg_size) {
             print_error("send() failed", errno);
         }
 
-        retVal = recv(this->server_fd, this->read_buffer, msg_size, 0);
-        if (DEBUG) { std::cout << "Latency-received size: " << retVal << std::endl; }
-        if (retVal < 0) {
+        ret_value = recv(this->server_fd, this->read_buffer, msg_size, 0);
+        if (DEBUG) { std::cout << "Latency-received size: " << ret_value << std::endl; }
+        if (ret_value < 0) {
             print_error("recv() failed", errno);
         }
 
         cycle_end_time = steady_clock::now();
 
         /* Measure cycle RTT*/
-        currentCycleDuration = cycle_end_time - cycle_start_time;
+        current_cycle_duration = cycle_end_time - cycle_start_time;
 
         cycles_counter++;
         if (cycles_counter == 1) {
-            rtt = currentCycleDuration;
+            rtt = current_cycle_duration;
             continue;
         }
 
         /* Calculate weighted average of RTT. */
-        auto currentRTT = 0.8 * rtt + 0.2 * currentCycleDuration;
+        auto currentRTT = 0.8 * rtt + 0.2 * current_cycle_duration;
 
 //        auto total_time = cycle_end_time - warm_up_start_time; //TODO del
 //        auto total_time_seconds = duration_cast<seconds>(total_time).count();
@@ -126,19 +126,19 @@ void Client::warm_up() {
 }
 
 
-void Client::measure_throughput(size_t packetSize) {
+void Client::measure_throughput(size_t packet_size) {
     /* Set chrono clocks*/
     steady_clock::time_point cycle_start_time, cycle_end_time;
     steady_clock::duration cycleTime;
     double max_rate = 0.0;
 
     /* init calculations */
-    auto cycle_bytes_transferred = 2* RTT_PACKETS_PER_CYCLE * packetSize;
+    auto cycle_bytes_transferred = 2* RTT_PACKETS_PER_CYCLE * packet_size;
     auto bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
 
     /* Init the packet message to send*/
-    char msg[packetSize];
-    memset(msg, 1, packetSize);
+    char msg[packet_size];
+    memset(msg, 1, packet_size);
 
     // Measure throughput for pre defined # of cycle
     for (int cycleIndex = 0; cycleIndex < RTT_NUM_OF_CYCLES; cycleIndex++) {
@@ -147,12 +147,12 @@ void Client::measure_throughput(size_t packetSize) {
         // Sending continuously pre defined # of packets.
         for (int packetIndex = 0; packetIndex < RTT_PACKETS_PER_CYCLE; packetIndex++) {
             /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
-            ssize_t retVal = send(this->server_fd, &msg, packetSize, 0);
-            if (retVal != packetSize) { print_error("send() failed", errno); }
+            ssize_t ret_value = send(this->server_fd, &msg, packet_size, 0);
+            if (ret_value != packet_size) { print_error("send() failed", errno); }
 
             /* Receive packet and verify the #bytes sent. */
-            retVal = recv(this->server_fd, this->read_buffer, packetSize, 0);
-            if (retVal < 0) { print_error("recv() failed", errno); }
+            ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
+            if (ret_value < 0) { print_error("recv() failed", errno); }
         }
 
         cycle_end_time  = steady_clock::now();
@@ -180,13 +180,13 @@ void Client::measure_throughput(size_t packetSize) {
         rate_unit = "bps";
     }
 
-    printf(THROUGHPUT_FORMAT, (int)packetSize, max_rate, rate_unit.c_str());
+    printf(THROUGHPUT_FORMAT, (int)packet_size, max_rate, rate_unit.c_str());
 
 }
 
 
 
-void Client::measure_latency(size_t packetSize) {
+void Client::measure_latency(size_t packet_size) {
     /* Set chrono clocks*/
     steady_clock::time_point start_time;
     steady_clock::time_point end_time;
@@ -194,23 +194,23 @@ void Client::measure_latency(size_t packetSize) {
 
 
     /* Init the packet message to send*/
-    char msg[packetSize];
-    memset(msg, 1, packetSize);
+    char msg[packet_size];
+    memset(msg, 1, packet_size);
 
     /* Take time*/
     start_time = steady_clock::now();
 
-    /* Send 1 packet with (size_t) packetSize */
-    ssize_t retVal = send(this->server_fd, &msg, packetSize, 0);
-    if (retVal != packetSize) { print_error("send() failed", errno); }
+    /* Send 1 packet with (size_t) packet_size */
+    ssize_t ret_value = send(this->server_fd, &msg, packet_size, 0);
+    if (ret_value != packet_size) { print_error("send() failed", errno); }
 
-    if (DEBUG) { std::cout << "Latency-sent size: " << packetSize << std::endl; }
+    if (DEBUG) { std::cout << "Latency-sent size: " << packet_size << std::endl; }
 
-    /* Receive 1 packet with (size_t) packetSize */
-    retVal = recv(this->server_fd, this->read_buffer, packetSize, 0);
-    if (retVal < 0) { print_error("recv() failed", errno); }
+    /* Receive 1 packet with (size_t) packet_size */
+    ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
+    if (ret_value < 0) { print_error("recv() failed", errno); }
 
-    if (DEBUG) { std::cout << "Latency-received size: " << retVal << std::endl; }
+    if (DEBUG) { std::cout << "Latency-received size: " << ret_value << std::endl; }
 
     end_time = steady_clock::now();
 
@@ -249,9 +249,9 @@ int main(int argc, char const *argv[]) {
     client.warm_up();
 
     /* Measure throughput and latency , for exponential series of message sizes */
-    for (size_t packetSize = 1; packetSize <= 1024; packetSize = packetSize << 1u) {
-        client.measure_throughput(packetSize);
-        client.measure_latency(packetSize);
+    for (size_t packet_size = 1; packet_size <= 1024; packet_size = packet_size << 1u) {
+        client.measure_throughput(packet_size);
+        client.measure_latency(packet_size);
     }
 
     /* Close client and disconnect from server */
