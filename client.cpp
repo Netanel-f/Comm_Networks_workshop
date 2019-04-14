@@ -128,52 +128,44 @@ void Client::warm_up() {
 
 void Client::measure_throughput(size_t packetSize) {
     /* Set chrono clocks*/
-    std::chrono::high_resolution_clock::time_point cycleStartTime;
-    std::chrono::high_resolution_clock::time_point cycleEndTime;
-    std::chrono::high_resolution_clock::duration cycleTime;
-    float max_rate = 0.0;
+    steady_clock::time_point cycle_start_time, cycle_end_time;
+    steady_clock::duration cycleTime;
+    double max_rate = 0.0;
 
-    // init calculations
+    /* init calculations */
     auto cycle_bytes_transferred = 2* RTT_PACKETS_PER_CYCLE * packetSize;
-//    auto cycle_Mbits_transferred = cycle_bytes_transferred / BYTES_TO_MEGABITS;
-    auto cycle_bits_transferred = cycle_bytes_transferred * BYTES_TO_BITS;
-
-//    using fp_seconds = std::chrono::duration<float, std::chrono::seconds::period>;
-
+    auto bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
 
     /* Init the packet message to send*/
     char msg[packetSize];
     memset(msg, 1, packetSize);
 
+    // Measure throughput for pre defined # of cycle
     for (int cycleIndex = 0; cycleIndex < RTT_NUM_OF_CYCLES; cycleIndex++) {
-        cycleStartTime = std::chrono::high_resolution_clock::now();
+        cycle_start_time = steady_clock::now();
 
+        // Sending continuously pre defined # of packets.
         for (int packetIndex = 0; packetIndex < RTT_PACKETS_PER_CYCLE; packetIndex++) {
+            /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
             ssize_t retVal = send(this->server_fd, &msg, packetSize, 0);
-            if (retVal != packetSize) {
-                print_error("send() failed", errno);
-            }
+            if (retVal != packetSize) { print_error("send() failed", errno); }
 
+            /* Receive packet and verify the #bytes sent. */
             retVal = recv(this->server_fd, this->read_buffer, packetSize, 0);
-            if (retVal < 0) {
-                print_error("recv() failed", errno);
-            }
+            if (retVal < 0) { print_error("recv() failed", errno); }
         }
 
-        cycleEndTime  = std::chrono::high_resolution_clock::now();
-        cycleTime = (cycleEndTime - cycleStartTime);
+        cycle_end_time  = steady_clock::now();
 
-        auto fptsecs = fp_seconds(cycleTime);
-        auto totalTimeSecs = fptsecs.count();
+        auto cycle_time_seconds = fp_seconds(cycle_end_time - cycle_start_time);
 
-//        auto cycleThroughput = cycle_Mbits_transferred / totalTimeSecs;
-        auto cycleThroughput = cycle_bits_transferred / totalTimeSecs;
-        if (cycleThroughput > max_rate) {
-            max_rate = cycleThroughput;
+        auto cycle_throughput = bits_transferred_per_cycle / cycle_time_seconds.count();
+        if (cycle_throughput > max_rate) {
+            max_rate = cycle_throughput;
         }
     }
 
-//    printf(THROUGHPUT_FORMAT, (int)packetSize, max_rate, "Megabits / second");
+    /* Print maximal throughput measured */
     std::string rate_unit;
     if (max_rate > GIGABIT_IN_BITS) {
         max_rate = max_rate / GIGABIT_IN_BITS;
