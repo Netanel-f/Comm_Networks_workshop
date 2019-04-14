@@ -26,8 +26,8 @@ public:
 
     //// client actions
     void warm_up(); //TODO delete me
-    void measure_throughput(size_t packet_size);
-    void measure_latency(size_t packet_size);
+    void measure_throughput(ssize_t packet_size);
+    void measure_latency(ssize_t packet_size);
     void kill_client();
 
 private:
@@ -41,19 +41,19 @@ private:
  */
 Client::Client(const char * serverIP) {
     /* setup sockets and structs */
-    struct sockaddr_in serverAddress;
+    struct sockaddr_in server_address;
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) { print_error("socket() error", errno); }
 
-    memset(&serverAddress, 0, sizeof(serverAddress));
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(PORT_NUMBER);
+    memset(&server_address, 0, sizeof(server_address));
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(PORT_NUMBER);
 
-    int ret_value = inet_pton(AF_INET, serverIP, &serverAddress.sin_addr);
+    int ret_value = inet_pton(AF_INET, serverIP, &server_address.sin_addr);
     if (ret_value <= 0) { print_error("inet_pton()", errno); }
 
-    ret_value = connect(server_fd, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
+    ret_value = connect(server_fd, (struct sockaddr *)&server_address, sizeof(server_address));
     if (ret_value != 0) { print_error("connect()", errno); }
 
     bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
@@ -77,7 +77,7 @@ void Client::warm_up() {
     /* Create message in pre-defined warm-up packet size */
     char msg[WARMPUP_PACKET_SIZE];
     memset(msg, 1, WARMPUP_PACKET_SIZE);
-    size_t msg_size = WARMPUP_PACKET_SIZE;
+    ssize_t msg_size = WARMPUP_PACKET_SIZE;
 
     /* Loop until RTT converges, but no less than MIN_SECONDS_TO_WARMUP */
     while (keepWarmUp) {
@@ -126,7 +126,7 @@ void Client::warm_up() {
 }
 
 
-void Client::measure_throughput(size_t packet_size) {
+void Client::measure_throughput(ssize_t packet_size) {
     /* Set chrono clocks*/
     steady_clock::time_point cycle_start_time, cycle_end_time;
     steady_clock::duration cycleTime;
@@ -186,7 +186,7 @@ void Client::measure_throughput(size_t packet_size) {
 
 
 
-void Client::measure_latency(size_t packet_size) {
+void Client::measure_latency(ssize_t packet_size) {
     /* Set chrono clocks*/
     steady_clock::time_point start_time;
     steady_clock::time_point end_time;

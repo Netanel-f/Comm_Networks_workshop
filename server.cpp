@@ -24,9 +24,9 @@ private:
  */
 Server::Server() {
     // setup sockets and structs
-    struct sockaddr_in serverAddress;
+    struct sockaddr_in server_address;
 
-    bzero(&serverAddress, sizeof(struct sockaddr_in));
+    bzero(&server_address, sizeof(struct sockaddr_in));
 
     welcome_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (welcome_socket < 0) {
@@ -37,11 +37,11 @@ Server::Server() {
         print_error("setsockopt", errno);
     }
 
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_addr.s_addr = INADDR_ANY;
-    serverAddress.sin_port = htons(PORT_NUMBER);
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = INADDR_ANY;
+    server_address.sin_port = htons(PORT_NUMBER);
 
-    int ret_value = bind(welcome_socket, (struct sockaddr*) &serverAddress, sizeof(serverAddress));
+    int ret_value = bind(welcome_socket, (struct sockaddr*) &server_address, sizeof(server_address));
     if (ret_value < 0) {
         print_error("bind", errno);
     }
