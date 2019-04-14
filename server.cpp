@@ -90,6 +90,7 @@ void Server::echo() {
         /* keep loop until client closed the socket. */
         ssize_t ret_value = recv(this->client_fd, this->read_buffer, (size_t) WARMPUP_PACKET_SIZE, 0);
         if (DEBUG) { std::cout << "msg received size: " << ret_value<< std::endl; }
+
         if (ret_value < 0) {
             print_error("recv() failed", errno);
         }

@@ -6,8 +6,6 @@
 
 #include "shared.h"
 
-#define THROUGHPUT_FORMAT "%d\t%f\t%s\t"
-#define LATENCY_FORMAT "%f\t%s\n"
 
 using namespace std::chrono;
 using fp_milliseconds = std::chrono::duration<double, std::chrono::milliseconds::period>;
@@ -25,13 +23,20 @@ public:
     explicit Client(const char * serverIP);
 
     //// client actions
-    void warm_up(); //TODO delete me
-    void measure_throughput(char * msg, ssize_t packet_size);
-    void measure_latency(char * msg, ssize_t packet_size);
+    void run_tests();
     void kill_client();
 
 private:
+    void warm_up();
+    void measure_throughput(char * msg, ssize_t packet_size);
+    void measure_latency(char * msg, ssize_t packet_size);
+    void print_results(ssize_t packet_size);
+    //// Keeping private variables to store results.
+//    char message[MAX_PACKET_SIZE];
+//    ssize_t packet_size;
+    double max_rate_result;
     double latency_result;
+
 
     static void print_error(const std::string& function_name, int error_number);
 
@@ -67,6 +72,7 @@ Client::Client(const char * serverIP) {
 void Client::warm_up() {
     char msg[WARMPUP_PACKET_SIZE];
     measure_latency(msg, WARMPUP_PACKET_SIZE);
+
     double rtt = this->latency_result;
 
     /* Set chrono clocks*/
@@ -75,8 +81,7 @@ void Client::warm_up() {
     while (true) {
         measure_latency(msg, WARMPUP_PACKET_SIZE);
 
-        auto warmup_seconds = duration_cast<seconds>(
-                steady_clock::now() - warm_up_start_time).count();
+        auto warmup_seconds = duration_cast<seconds>(steady_clock::now() - warm_up_start_time).count();
 
         if ((warmup_seconds > MIN_SECONDS_TO_WARMUP) &&
             (this->latency_result - rtt < (rtt / 100))) {
@@ -86,80 +91,21 @@ void Client::warm_up() {
         }
     }
 }
-//void Client::warm_up() {
-//    /* Set chrono clocks*/
-//    steady_clock::time_point warm_up_start_time = steady_clock::now();
-//    steady_clock::time_point cycle_start_time, cycle_end_time;
-//
-//    bool keepWarmUp = true;
-//    int cycles_counter = 0; // TODO remove
-//
-//    auto rtt = fp_milliseconds(steady_clock::duration(0));
-//
-//    steady_clock::duration current_cycle_duration;
-//
-//    /* Create message in pre-defined warm-up packet size */
-//    char msg[WARMPUP_PACKET_SIZE];
-//    memset(msg, 1, WARMPUP_PACKET_SIZE);
-//    ssize_t msg_size = WARMPUP_PACKET_SIZE;
-//
-//    /* Loop until RTT converges, but no less than MIN_SECONDS_TO_WARMUP */
-//    while (keepWarmUp) {
-//        if (DEBUG) { std::cout << "Latency cycle #" << cycles_counter << std::endl; }
-//
-//        //take time
-//        cycle_start_time = steady_clock::now();
-//
-//        ssize_t ret_value = send(this->server_fd, &msg, msg_size, 0);
-//        if (DEBUG) { std::cout << "Latency-sent size: " << msg_size << std::endl; }
-//        if (ret_value != msg_size) {
-//            print_error("send() failed", errno);
-//        }
-//
-//        ret_value = recv(this->server_fd, this->read_buffer, msg_size, 0);
-//        if (DEBUG) { std::cout << "Latency-received size: " << ret_value << std::endl; }
-//        if (ret_value < 0) {
-//            print_error("recv() failed", errno);
-//        }
-//
-//        cycle_end_time = steady_clock::now();
-//
-//        /* Measure cycle RTT*/
-//        current_cycle_duration = cycle_end_time - cycle_start_time;
-//
-//        cycles_counter++;
-//        if (cycles_counter == 1) {
-//            rtt = current_cycle_duration;
-//            continue;
-//        }
-//
-//        /* Calculate weighted average of RTT. */
-//        auto currentRTT = 0.8 * rtt + 0.2 * current_cycle_duration;
-//
-//        auto total_time_seconds = duration_cast<seconds>(cycle_end_time - warm_up_start_time).count();
-//
-//        if ((total_time_seconds > MIN_SECONDS_TO_WARMUP) && (currentRTT - rtt < (rtt / 100))) {
-//            // convergence detection: a minimal number to start with,
-//            // followed by iterations until the average changes less than 1% between iterations...
-//            keepWarmUp = false;
-//        }
-//    }
-//}
 
 
 void Client::measure_throughput(char * msg, ssize_t packet_size) {
     /* Set chrono clocks*/
     steady_clock::time_point cycle_start_time, cycle_end_time;
     steady_clock::duration cycleTime;
-    double max_rate = 0.0;
+    this->max_rate_result = 0.0;
 
     /* init calculations */
     auto cycle_bytes_transferred = 2* RTT_PACKETS_PER_CYCLE * packet_size;
     auto bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
 
     /* Init the packet message to send*/
-//    char msg[packet_size];
     memset(msg, 1, packet_size);
+
 
     /* Measure throughput for pre defined # of cycle */
     for (int cycle_index = 0; cycle_index < RTT_NUM_OF_CYCLES; cycle_index++) {
@@ -168,7 +114,7 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
         /* Sending continuously pre defined # of packets */
         for (int packet_index = 0; packet_index < RTT_PACKETS_PER_CYCLE; packet_index++) {
             /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
-            ssize_t ret_value = send(this->server_fd, &msg, packet_size, 0);
+            ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
             if (ret_value != packet_size) { print_error("send() failed", errno); }
 
             /* Receive packet and verify the #bytes sent. */
@@ -181,28 +127,11 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
         auto cycle_time_seconds = fp_seconds(cycle_end_time - cycle_start_time);
 
         auto cycle_throughput = bits_transferred_per_cycle / cycle_time_seconds.count();
-        if (cycle_throughput > max_rate) {
-            max_rate = cycle_throughput;
+
+        if (cycle_throughput > this->max_rate_result) {
+            this->max_rate_result = cycle_throughput;
         }
     }
-
-    /* Print maximal throughput measured */
-    std::string rate_unit;
-    if (max_rate > GIGABIT_IN_BITS) {
-        max_rate = max_rate / GIGABIT_IN_BITS;
-        rate_unit = "Gbps";
-    } else if (max_rate > MEGABIT_IN_BITS) {
-        rate_unit = "Mbps";
-        max_rate = max_rate / MEGABIT_IN_BITS;
-    } else if (max_rate > KILOBIT_IN_BITS) {
-        max_rate = max_rate / KILOBIT_IN_BITS;
-        rate_unit = "Kbps";
-    } else {
-        rate_unit = "bps";
-    }
-
-    printf(THROUGHPUT_FORMAT, (int)packet_size, max_rate, rate_unit.c_str());
-
 }
 
 
@@ -211,17 +140,14 @@ void Client::measure_latency(char * msg, ssize_t packet_size) {
     steady_clock::time_point start_time;
     steady_clock::time_point end_time;
 
-
-
     /* Init the packet message to send*/
-//    char msg[packet_size];
     memset(msg, 1, packet_size);
 
     /* Take time*/
     start_time = steady_clock::now();
 
     /* Send 1 packet with (size_t) packet_size */
-    ssize_t ret_value = send(this->server_fd, &msg, packet_size, 0);
+    ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
     if (ret_value != packet_size) { print_error("send() failed", errno); }
 
     if (DEBUG) { std::cout << "Latency-sent size: " << packet_size << std::endl; }
@@ -238,11 +164,31 @@ void Client::measure_latency(char * msg, ssize_t packet_size) {
     auto latency = rtt.count() / 2;
     if (DEBUG) { std::cout << "latency is: " << latency << " milliseconds." << std::endl; }
 
-    printf(LATENCY_FORMAT, latency, "milliseconds");
-    //TODO
     this->latency_result = latency;
 }
 
+/**
+ * This method will print results to screen as saved in client's object.
+ * @param packet_size the packet size results.
+ */
+void Client::print_results(ssize_t packet_size) {
+    /* Print maximal throughput measured */
+    std::string rate_unit;
+    if (max_rate_result > GIGABIT_IN_BITS) {
+        max_rate_result = max_rate_result / GIGABIT_IN_BITS;
+        rate_unit = "Gbps";
+    } else if (max_rate_result > MEGABIT_IN_BITS) {
+        rate_unit = "Mbps";
+        max_rate_result = max_rate_result / MEGABIT_IN_BITS;
+    } else if (max_rate_result > KILOBIT_IN_BITS) {
+        max_rate_result = max_rate_result / KILOBIT_IN_BITS;
+        rate_unit = "Kbps";
+    } else {
+        rate_unit = "bps";
+    }
+
+    printf(RESULTS_FORMAT, packet_size, max_rate_result, rate_unit.c_str(), latency_result, "milliseconds");
+}
 
 /**
  * close the open socket towards server.
@@ -261,24 +207,27 @@ void Client::print_error(const std::string& function_name, int error_number) {
     exit(EXIT_FAILURE);
 }
 
+void Client::run_tests() {
+    /* warm up until latency converges */
+    warm_up();
+
+
+    /* Measure throughput and latency , for exponential series of message sizes */
+    for (ssize_t packet_size = 1; packet_size <= 1024; packet_size = packet_size << 1u) {
+        /* Init the packet message to send*/
+        char msg[packet_size];
+        measure_throughput(msg, packet_size);
+        measure_latency(msg, packet_size);
+        print_results(packet_size);
+    }
+}
+
 
 int main(int argc, char const *argv[]) {
 
-    /* Create client object and connect to given server-ip */
+    /* Create client object and connect to given server-ip and run tests */
     Client client = Client(argv[1]);
-
-    /* warm up until latency converges */
-    client.warm_up();
-
-    /* Measure throughput and latency , for exponential series of message sizes */
-    for (size_t packet_size = 1; packet_size <= 1024; packet_size = packet_size << 1u) {
-        /* Init the packet message to send*/
-        char msg[packet_size];
-//        memset(msg, 1, packet_size);
-
-        client.measure_throughput(msg, packet_size);
-        client.measure_latency(msg, packet_size);
-    }
+    client.run_tests();
 
     /* Close client and disconnect from server */
     client.kill_client();
