@@ -187,35 +187,34 @@ void Client::measure_throughput(size_t packetSize) {
 
 
 void Client::measure_latency(size_t packetSize) {
-    std::chrono::high_resolution_clock::time_point start_time;
-    std::chrono::high_resolution_clock::time_point end_time;
+    /* Set chrono clocks*/
+    steady_clock::time_point start_time;
+    steady_clock::time_point end_time;
 
 
-//    using fp_milliseconds = std::chrono::duration<float, std::chrono::milliseconds::period>;
 
-    //create message in size
+    /* Init the packet message to send*/
     char msg[packetSize];
     memset(msg, 1, packetSize);
 
-    //take time
-    start_time = std::chrono::high_resolution_clock::now();
+    /* Take time*/
+    start_time = steady_clock::now();
 
+    /* Send 1 packet with (size_t) packetSize */
     ssize_t retVal = send(this->server_fd, &msg, packetSize, 0);
+    if (retVal != packetSize) { print_error("send() failed", errno); }
+
     if (DEBUG) { std::cout << "Latency-sent size: " << packetSize << std::endl; }
-    if (retVal != packetSize) {
-        print_error("send() failed", errno);
-    }
 
+    /* Receive 1 packet with (size_t) packetSize */
     retVal = recv(this->server_fd, this->read_buffer, packetSize, 0);
+    if (retVal < 0) { print_error("recv() failed", errno); }
+
     if (DEBUG) { std::cout << "Latency-received size: " << retVal << std::endl; }
-    if (retVal < 0) {
-        print_error("recv() failed", errno);
-    }
 
-    end_time = std::chrono::high_resolution_clock::now();
+    end_time = steady_clock::now();
 
-//    std::chrono::high_resolution_clock::duration currentCycleDuration = endTime - startTime;
-    auto rtt = fp_milliseconds(std::chrono::high_resolution_clock::duration(end_time - start_time));
+    auto rtt = fp_milliseconds(steady_clock::duration(end_time - start_time));
     auto latency = rtt.count() / 2;
     if (DEBUG) { std::cout << "latency is: " << latency << " milliseconds." << std::endl; }
 
