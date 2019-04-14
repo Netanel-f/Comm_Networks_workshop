@@ -40,7 +40,7 @@ private:
  * @param serverIP - the server destination ipv4 format.
  */
 Client::Client(const char * serverIP) {
-    // setup sockets and structs
+    /* setup sockets and structs */
     struct sockaddr_in serverAddress;
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -55,34 +55,36 @@ Client::Client(const char * serverIP) {
 
     retVal = connect(server_fd, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
     if (retVal != 0) { print_error("connect()", errno); }
-    // clear read_buffer
-    bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);
+
+    bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
 }
 
-
+/**
+ * Warm up the TCP/IP protocol to measure optimal results.
+ */
 void Client::warm_up() {
     /* Set chrono clocks*/
-    std::chrono::steady_clock::time_point warm_up_start_time = std::chrono::steady_clock::now();
-    std::chrono::high_resolution_clock::time_point start_time;
-    std::chrono::high_resolution_clock::time_point end_time;
+    steady_clock::time_point warm_up_start_time = steady_clock::now();
+    steady_clock::time_point cycle_start_time, cycle_end_time;
 
     bool keepWarmUp = true;
     int cycles_counter = 0; // TODO remove
 
-    auto rtt = fp_milliseconds(std::chrono::high_resolution_clock::duration(0));
+    auto rtt = fp_milliseconds(steady_clock::duration(0));
 
-    std::chrono::high_resolution_clock::duration currentCycleDuration;
+    steady_clock::duration currentCycleDuration;
 
-    //create message in size
+    /* Create message in pre-defined warm-up packet size */
     char msg[WARMPUP_PACKET_SIZE];
     memset(msg, 1, WARMPUP_PACKET_SIZE);
     size_t msg_size = WARMPUP_PACKET_SIZE;
 
+    /* Loop until RTT converges, but no less than MIN_SECONDS_TO_WARMUP */
     while (keepWarmUp) {
         if (DEBUG) { std::cout << "Latency cycle #" << cycles_counter << std::endl; }
 
         //take time
-        start_time = std::chrono::high_resolution_clock::now();
+        cycle_start_time = steady_clock::now();
 
         ssize_t retVal = send(this->server_fd, &msg, msg_size, 0);
         if (DEBUG) { std::cout << "Latency-sent size: " << msg_size << std::endl; }
@@ -96,9 +98,10 @@ void Client::warm_up() {
             print_error("recv() failed", errno);
         }
 
-        end_time = std::chrono::high_resolution_clock::now();
+        cycle_end_time = steady_clock::now();
 
-        currentCycleDuration = end_time - start_time;
+        /* Measure cycle RTT*/
+        currentCycleDuration = cycle_end_time - cycle_start_time;
 
         cycles_counter++;
         if (cycles_counter == 1) {
@@ -106,12 +109,13 @@ void Client::warm_up() {
             continue;
         }
 
-        // calculating weighted average of rtt.
+        /* Calculate weighted average of RTT. */
         auto currentRTT = 0.8 * rtt + 0.2 * currentCycleDuration;
 
-        auto total_time = std::chrono::steady_clock::now() - warm_up_start_time;
+//        auto total_time = cycle_end_time - warm_up_start_time; //TODO del
+//        auto total_time_seconds = duration_cast<seconds>(total_time).count();
 
-        auto total_time_seconds = std::chrono::duration_cast<std::chrono::seconds>(total_time).count();
+        auto total_time_seconds = duration_cast<seconds>(cycle_end_time - warm_up_start_time).count();
 
         if ((total_time_seconds > MIN_SECONDS_TO_WARMUP) && (currentRTT - rtt < (rtt / 100))) {
             // convergence detection: a minimal number to start with,
@@ -120,7 +124,6 @@ void Client::warm_up() {
         }
     }
 }
-
 
 
 void Client::measure_throughput(size_t packetSize) {
