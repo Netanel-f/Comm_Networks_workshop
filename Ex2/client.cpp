@@ -28,7 +28,8 @@ private:
     void measure_latency(char * msg, ssize_t packet_size);
     void print_results(ssize_t packet_size);
     //// Keeping private variables to store results.
-    double max_rate_result = 0.0;
+    double max_throughput_result = 0.0;
+    double packet_rate_result = 0.0;
     double latency_result = 0.0;
 };
 
@@ -90,7 +91,7 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
     /* Set chrono clocks*/
     steady_clock::time_point cycle_start_time, cycle_end_time;
     steady_clock::duration cycleTime;
-    this->max_rate_result = 0.0;
+    this->max_throughput_result = 0.0;
 
     /* init calculations */
     auto cycle_bytes_transferred = 2* RTT_PACKETS_PER_CYCLE * packet_size;
@@ -120,8 +121,9 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
 
         auto cycle_throughput = bits_transferred_per_cycle / cycle_time_seconds.count();
 
-        if (cycle_throughput > this->max_rate_result) {
-            this->max_rate_result = cycle_throughput;
+        if (cycle_throughput > this->max_throughput_result) {
+            this->max_throughput_result = cycle_throughput;
+            this->packet_rate_result = (cycle_throughput) / packet_size;
         }
     }
 }
@@ -163,19 +165,19 @@ void Client::measure_latency(char * msg, ssize_t packet_size) {
 void Client::print_results(ssize_t packet_size) {
     /* Print maximal throughput measured */
     std::string rate_unit;
-    if (max_rate_result > GIGABIT_IN_BITS) {
-        max_rate_result = max_rate_result / GIGABIT_IN_BITS;
+    if (max_throughput_result > GIGABIT_IN_BITS) {
+        max_throughput_result = max_throughput_result / GIGABIT_IN_BITS;
         rate_unit = "Gbps";
-    } else if (max_rate_result > MEGABIT_IN_BITS) {
+    } else if (max_throughput_result > MEGABIT_IN_BITS) {
         rate_unit = "Mbps";
-        max_rate_result = max_rate_result / MEGABIT_IN_BITS;
-    } else if (max_rate_result > KILOBIT_IN_BITS) {
-        max_rate_result = max_rate_result / KILOBIT_IN_BITS;
+        max_throughput_result = max_throughput_result / MEGABIT_IN_BITS;
+    } else if (max_throughput_result > KILOBIT_IN_BITS) {
+        max_throughput_result = max_throughput_result / KILOBIT_IN_BITS;
         rate_unit = "Kbps";
     } else {
         rate_unit = "bps";
     }
-    printf(RESULTS_FORMAT, packet_size, max_rate_result, rate_unit.c_str(), latency_result, "milliseconds");
+    printf(RESULTS_FORMAT, packet_size, max_throughput_result, rate_unit.c_str(), packet_rate_result, "packet/second", latency_result, "milliseconds");
 }
 
 /**

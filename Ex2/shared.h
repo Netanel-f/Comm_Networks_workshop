@@ -28,7 +28,7 @@
 #define MEGABIT_IN_BITS 1000000
 #define GIGABIT_IN_BITS 1000000000
 
-#define RESULTS_FORMAT "%ld\t%f\t%s\t%f\t%s\n"
+#define RESULTS_FORMAT "%ld\t%f\t%s\t%f\t%s\t%f\t%s\n"
 
 
 #endif //COMM_NETS_SHARED_H
