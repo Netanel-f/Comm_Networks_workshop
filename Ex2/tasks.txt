@@ -1,0 +1,36 @@
+GENERAL:
+
+GENERAL_CLIENT which will encapsulate specific clients.
+it's main:
+- Single-stream TCP
+- Single-stream Infiniband
+- Multi-stream TCP & Infiniband
+
+- Multi-threaded: (forking code)
+  - Single-stream TCP & Infiniband
+  - Single-stream Infiniband
+
+
+GENERAL_SERVER
+will listen to pre-defined commands
+
+TCP_CLIENT:
+Variable msg size support | Default: FALSE
+Multi-stream support | Default: FALSE
+Support to establish Infiniband connection | Default: FALSE
+
+INFINIBAND_CLIENT:
+
+
+
+Part 1:
+warm up needed?
+
+
+P2:
+
+
+P3:
+
+
+P4:
