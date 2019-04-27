@@ -18,7 +18,7 @@ public:
     //// C-tor
     explicit Client(const char * serverIP);
     //// client actions
-    void run_tests();
+    void run_tests(bool incremental_msg_size);
     void kill_client();
 
 private:
@@ -200,12 +200,19 @@ void Client::print_error(const std::string& function_name, int error_number) {
 /**
  * This method will warm up the system and will run measurement tests.
  */
-void Client::run_tests() {
+void Client::run_tests(bool incremental_msg_size) {
     /* warm up until latency converges */
     warm_up();
 
+    //TODO check ssize_t limit
+    ssize_t max_packet_size = ONE_BYTE;
+
+    if (incremental_msg_size) {
+        max_packet_size = ONE_MEGABYTE_IN_BYTES;
+    }
+
     /* Measure throughput and latency , for exponential series of message sizes */
-    for (ssize_t packet_size = 1; packet_size <= 1024; packet_size = packet_size << 1u) {
+    for (ssize_t packet_size = ONE_BYTE; packet_size <= max_packet_size; packet_size = packet_size << 1u) {
         /* Init the packet message to send*/
         char msg[packet_size];
 
@@ -221,7 +228,10 @@ int main(int argc, char const *argv[]) {
 
     /* Create client object and connect to given server-ip and run tests */
     Client client = Client(argv[1]);
-    client.run_tests();
+    // Part 1:
+    client.run_tests(false);
+//    // Part 2:
+//    client.run_tests(true);
 
     /* Close client and disconnect from server */
     client.kill_client();
