@@ -12,3 +12,14 @@ add_executable(server ${SERVER_SRC})
 
 set(CLIENT_SRC ${CLIENT})
 add_executable(client ${CLIENT_SRC})
+
+
+# Ex2
+set(EX2_CLIENT Ex2/client.cpp Ex2/shared.h)
+set(EX2_SERVER Ex2/server.cpp Ex2/shared.h)
+
+set(EX2_SERVER_SRC ${EX2_SERVER})
+add_executable(ex2server ${EX2_SERVER_SRC})
+
+set(EX2_CLIENT_SRC ${EX2_CLIENT})
+add_executable(ex2client ${EX2_CLIENT_SRC})
