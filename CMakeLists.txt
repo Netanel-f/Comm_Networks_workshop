@@ -4,8 +4,8 @@ project(Comm_Nets)
 set(CMAKE_CXX_STANDARD 11)
 
 
-set(CLIENT client.cpp shared.h)
-set(SERVER server.cpp shared.h)
+set(CLIENT Ex1/client.cpp Ex1/shared.h)
+set(SERVER Ex1/server.cpp Ex1/shared.h)
 
 set(SERVER_SRC ${SERVER})
 add_executable(server ${SERVER_SRC})
