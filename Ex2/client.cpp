@@ -11,12 +11,14 @@ using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
  * Constructor of Client class.
  */
 class Client {
-    int server_fd;
+    int server_fds[MAX_PARALLEL_STREAMS] = {-1};
+    int server_fd;  //todo remove
     char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
 
 public:
     //// C-tor
-    explicit Client(const char * serverIP);
+    explicit Client(const char * serverIP); //todo remove
+    explicit Client(const char * serverIP, unsigned int num_of_streams);
     //// client actions
     void run_tests(bool incremental_msg_size);
     void kill_client();
@@ -32,6 +34,8 @@ private:
     double max_throughput_result = 0.0;
     double packet_rate_result = 0.0;
     double latency_result = 0.0;
+
+    unsigned int num_of_streams = 1;
 };
 
 /**
@@ -54,6 +58,51 @@ Client::Client(const char * serverIP) {
 
     ret_value = connect(server_fd, (struct sockaddr *)&server_address, sizeof(server_address));
     if (ret_value != 0) { print_error("connect()", errno); }
+
+    bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
+}
+
+
+/**
+ * Thie method will create Client Object and will connect the client to server
+ * @param serverIP - the server destination ipv4 format.
+ */
+Client::Client(const char * serverIP, unsigned int num_of_streams) {
+    server_fd = 0;  //todo remove
+    /* setup sockets and structs */
+    struct sockaddr_in server_address;
+
+    for (int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
+        bool socket_creation_failed = false;
+
+        int current_socket = socket(AF_INET, SOCK_STREAM, 0);
+        if (current_socket < 0) {
+            print_error("socket() error", errno);
+            socket_creation_failed = true;
+        }
+
+        server_fds[stream_idx] = current_socket;
+
+        memset(&server_address, 0, sizeof(server_address));
+        server_address.sin_family = AF_INET;
+        server_address.sin_port = htons(PORT_NUMBER);
+
+        int ret_value = inet_pton(AF_INET, serverIP, &server_address.sin_addr);
+        if (ret_value <= 0) {
+            print_error("inet_pton()", errno);
+            socket_creation_failed = true;
+        }
+
+        ret_value = connect(current_socket, (struct sockaddr *)&server_address, sizeof(server_address));
+        if (ret_value != 0) {
+            print_error("connect()", errno);
+            socket_creation_failed = true;
+        }
+
+        if (socket_creation_failed) {
+            stream_idx--;
+        }
+    }
 
     bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
 }
@@ -226,6 +275,7 @@ void Client::run_tests(bool incremental_msg_size) {
         /* Init the packet message to send*/
         char msg[packet_size];
 
+
         /* Preforming tests and printing results */
         measure_throughput(msg, packet_size);
         calculate_packet_rate(packet_size);
@@ -234,6 +284,25 @@ void Client::run_tests(bool incremental_msg_size) {
     }
 }
 
+void part1(const char * serverIP) {
+    /* Create client object and connect to given server-ip and run tests */
+    Client client = Client(serverIP);
+
+    client.run_tests(false);
+
+    /* Close client and disconnect from server */
+    client.kill_client();
+}
+
+void part3(const char * serverIP, unsigned int num_of_streams) {
+    /* Create client object and connect to given server-ip and run tests */
+    Client client = Client(serverIP, num_of_streams);
+
+    client.run_tests(true);
+
+
+
+}
 
 int main(int argc, char const *argv[]) {
 
@@ -241,8 +310,6 @@ int main(int argc, char const *argv[]) {
     Client client = Client(argv[1]);
     // Part 1:
     client.run_tests(false);
-//    // Part 2:
-//    client.run_tests(true);
 
     /* Close client and disconnect from server */
     client.kill_client();
