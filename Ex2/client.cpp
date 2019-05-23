@@ -187,7 +187,7 @@ void Client::print_results(ssize_t packet_size) {
     } else {
         rate_unit = "bps";
     }
-    printf(RESULTS_FORMAT, packet_size, max_throughput_result, rate_unit.c_str(), packet_rate_result, "packet/second", latency_result, "milliseconds");
+    printf(RESULTS_FORMAT, packet_size, max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second", latency_result, "milliseconds");
 }
 
 /**
