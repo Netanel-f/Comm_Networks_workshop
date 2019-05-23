@@ -13,10 +13,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <vector>
+#include <map>
 
 #define MAX_INCOMING_QUEUE 1
 #define PORT_NUMBER 54321
 #define WARMPUP_PACKET_SIZE 1024
+
+#define MAX_PARALLEL_STREAMS 10
 
 #define MIN_SECONDS_TO_WARMUP 20
 
