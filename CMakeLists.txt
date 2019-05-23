@@ -8,10 +8,10 @@ set(CLIENT Ex1/client.cpp Ex1/shared.h)
 set(SERVER Ex1/server.cpp Ex1/shared.h)
 
 set(SERVER_SRC ${SERVER})
-add_executable(server ${SERVER_SRC})
+add_executable(ex1server ${SERVER_SRC})
 
 set(CLIENT_SRC ${CLIENT})
-add_executable(client ${CLIENT_SRC})
+add_executable(ex1client ${CLIENT_SRC})
 
 
 # Ex2
