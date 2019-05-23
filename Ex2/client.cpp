@@ -25,6 +25,7 @@ private:
     static void print_error(const std::string& function_name, int error_number);
     void warm_up();
     void measure_throughput(char * msg, ssize_t packet_size);
+    void calculate_packet_rate(ssize_t packet_size);
     void measure_latency(char * msg, ssize_t packet_size);
     void print_results(ssize_t packet_size);
     //// Keeping private variables to store results.
@@ -123,9 +124,15 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
 
         if (cycle_throughput > this->max_throughput_result) {
             this->max_throughput_result = cycle_throughput;
-            this->packet_rate_result = (cycle_throughput) / packet_size;
         }
     }
+}
+
+/**
+ * This method will calculate the packet rate, based on previously throughput measured.
+ */
+void Client::calculate_packet_rate(ssize_t packet_size) {
+    this->packet_rate_result =  (this->max_throughput_result) / packet_size;
 }
 
 /**
@@ -134,6 +141,9 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
  * @param packet_size the size of message
  */
 void Client::measure_latency(char * msg, ssize_t packet_size) {
+    /* Reset latency_result variable */
+    this->latency_result = 0.0;
+
     /* Set chrono clocks*/
     steady_clock::time_point start_time, end_time;
 
@@ -218,6 +228,7 @@ void Client::run_tests(bool incremental_msg_size) {
 
         /* Preforming tests and printing results */
         measure_throughput(msg, packet_size);
+        calculate_packet_rate(packet_size);
         measure_latency(msg, packet_size);
         print_results(packet_size);
     }
