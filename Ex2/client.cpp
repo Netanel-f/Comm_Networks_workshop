@@ -17,7 +17,7 @@ class Client {
 
 public:
     //// C-tor
-    explicit Client(const char * serverIP); //todo remove
+//    explicit Client(const char * serverIP); //todo remove
     explicit Client(const char * serverIP, unsigned int num_of_streams);
     //// client actions
     void run_tests(bool incremental_msg_size);
@@ -28,7 +28,7 @@ private:
     void warm_up();
     void measure_throughput(char * msg, ssize_t packet_size);
     void calculate_packet_rate(ssize_t packet_size);
-    void measure_latency(char * msg, ssize_t packet_size);
+    void measure_latency(char * msg, ssize_t packet_size, int sockfd);
     void print_results(ssize_t packet_size);
     //// Keeping private variables to store results.
     double max_throughput_result = 0.0;
@@ -38,29 +38,29 @@ private:
     unsigned int num_of_streams = 1;
 };
 
-/**
- * Thie method will create Client Object and will connect the client to server
- * @param serverIP - the server destination ipv4 format.
- */
-Client::Client(const char * serverIP) {
-    /* setup sockets and structs */
-    struct sockaddr_in server_address;
-
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) { print_error("socket() error", errno); }
-
-    memset(&server_address, 0, sizeof(server_address));
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(PORT_NUMBER);
-
-    int ret_value = inet_pton(AF_INET, serverIP, &server_address.sin_addr);
-    if (ret_value <= 0) { print_error("inet_pton()", errno); }
-
-    ret_value = connect(server_fd, (struct sockaddr *)&server_address, sizeof(server_address));
-    if (ret_value != 0) { print_error("connect()", errno); }
-
-    bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
-}
+///**
+// * Thie method will create Client Object and will connect the client to server
+// * @param serverIP - the server destination ipv4 format.
+// */
+//Client::Client(const char * serverIP) {
+//    /* setup sockets and structs */
+//    struct sockaddr_in server_address;
+//
+//    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+//    if (server_fd < 0) { print_error("socket() error", errno); }
+//
+//    memset(&server_address, 0, sizeof(server_address));
+//    server_address.sin_family = AF_INET;
+//    server_address.sin_port = htons(PORT_NUMBER);
+//
+//    int ret_value = inet_pton(AF_INET, serverIP, &server_address.sin_addr);
+//    if (ret_value <= 0) { print_error("inet_pton()", errno); }
+//
+//    ret_value = connect(server_fd, (struct sockaddr *)&server_address, sizeof(server_address));
+//    if (ret_value != 0) { print_error("connect()", errno); }
+//
+//    bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
+//}
 
 
 /**
@@ -69,6 +69,7 @@ Client::Client(const char * serverIP) {
  */
 Client::Client(const char * serverIP, unsigned int num_of_streams) {
     server_fd = 0;  //todo remove
+    this->num_of_streams = num_of_streams;
     /* setup sockets and structs */
     struct sockaddr_in server_address;
 
@@ -189,7 +190,7 @@ void Client::calculate_packet_rate(ssize_t packet_size) {
  * @param msg pointer to char[packet_size]
  * @param packet_size the size of message
  */
-void Client::measure_latency(char * msg, ssize_t packet_size) {
+void Client::measure_latency(char * msg, ssize_t packet_size, int sockfd) {
     /* Reset latency_result variable */
     this->latency_result = 0.0;
 
@@ -203,11 +204,13 @@ void Client::measure_latency(char * msg, ssize_t packet_size) {
     start_time = steady_clock::now();
 
     /* Send 1 packet with (size_t) packet_size */
-    ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
+//    ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
+    ssize_t ret_value = send(sockfd, msg, packet_size, 0);
     if (ret_value != packet_size) { print_error("send() failed", errno); }
 
     /* Receive 1 packet with (size_t) packet_size */
-    ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
+    ret_value = recv(sockfd, this->read_buffer, packet_size, 0);
+//    ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
     if (ret_value < 0) { print_error("recv() failed", errno); }
 
     end_time = steady_clock::now();
@@ -286,7 +289,7 @@ void Client::run_tests(bool incremental_msg_size) {
 
 void part1(const char * serverIP) {
     /* Create client object and connect to given server-ip and run tests */
-    Client client = Client(serverIP);
+    Client client = Client(serverIP, 1);
 
     client.run_tests(false);
 
@@ -305,9 +308,10 @@ void part3(const char * serverIP, unsigned int num_of_streams) {
 }
 
 int main(int argc, char const *argv[]) {
-
+    //todo edit
     /* Create client object and connect to given server-ip and run tests */
-    Client client = Client(argv[1]);
+//    Client client = Client(argv[1]);
+    Client client = Client(argv[1], 1);
     // Part 1:
     client.run_tests(false);
 
