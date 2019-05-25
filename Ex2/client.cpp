@@ -283,7 +283,9 @@ void Client::print_results(ssize_t packet_size) {
     } else {
         rate_unit = "bps";
     }
-    printf(RESULTS_FORMAT, packet_size, max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second", latency_result, "milliseconds");
+//    printf(RESULTS_FORMAT, packet_size, max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second", latency_result, "milliseconds");
+    // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
+    printf(RESULTS_FORMAT, packet_size, this->num_of_streams, 1, latency_result, "milliseconds", max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second");
 }
 
 /**
@@ -345,8 +347,10 @@ void Client::run_tests(bool incremental_msg_size) {
 }
 
 void part1(const char * serverIP) {
+
     /* Create client object and connect to given server-ip and run tests */
     Client client = Client(serverIP, 1);
+    if (DEBUG) { printf("DEBUG: %s\n", "client object has been created"); }
 
     client.run_tests(false);
 
@@ -354,27 +358,24 @@ void part1(const char * serverIP) {
     client.kill_client();
 }
 
-void part3(const char * serverIP, unsigned int num_of_streams) {
+void part3(const char * serverIP, unsigned int num_of_streams, bool incremental) {
     /* Create client object and connect to given server-ip and run tests */
     Client client = Client(serverIP, num_of_streams);
 
-    client.run_tests(true);
-
-
-
-}
-
-int main(int argc, char const *argv[]) {
-    //todo edit
-    /* Create client object and connect to given server-ip and run tests */
-//    Client client = Client(argv[1]);
-    Client client = Client(argv[1], 1);
-    if (DEBUG) { printf("DEBUG: %s\n", "client object has been created"); }
-    // Part 1:
-    client.run_tests(false);
+    client.run_tests(incremental);
 
     /* Close client and disconnect from server */
     client.kill_client();
+}
+
+
+int main(int argc, char const *argv[]) {    //todo edit
+    /* Create client object and connect to given server-ip and run tests */
+//    Client client = Client(argv[1]);
+
+
+    part3(argv[1], 1, false);
+
     return EXIT_SUCCESS;
 }
 
