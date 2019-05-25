@@ -149,10 +149,11 @@ void Server::echoClient(int ec_client_fd) {
         if (this->clients_sockets.empty()) {
             killServer();
         }
+    } else {
+        ret_value = send(ec_client_fd, this->read_buffer, (size_t) ret_value, 0);
+        if (ret_value < 0) { print_error("send() failed", errno); }
     }
 
-    ret_value = send(ec_client_fd, this->read_buffer, (size_t) ret_value, 0);
-    if (ret_value < 0) { print_error("send() failed", errno); }
 }
 
 
