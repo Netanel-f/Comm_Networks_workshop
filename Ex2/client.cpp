@@ -9,9 +9,8 @@ using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
 
 
 struct TCPSocket {
-    int sockfd = -1;
-    double max_throughput_result = 0.0;
-    double packet_rate_result = 0.0;
+    char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
+    int socked_fd = -1;
     double latency_result = 0.0;
 };
 
@@ -22,7 +21,7 @@ class Client {
     TCPSocket server_sockets[MAX_PARALLEL_STREAMS];
 //    int server_fds[MAX_PARALLEL_STREAMS] = {-1};
 //    int server_fd;  //todo remove
-    char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
+//    char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
     unsigned int num_of_streams = 1;
 
 public:
@@ -96,7 +95,7 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
             socket_creation_failed = true;
         }
 
-        server_sockets[stream_idx].sockfd = current_socket;
+        server_sockets[stream_idx].socked_fd = current_socket;
 //        server_fds[stream_idx] = current_socket;
 
         memset(&server_address, 0, sizeof(server_address));
@@ -118,11 +117,11 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
         if (socket_creation_failed) {
             stream_idx--;
         }
+        bzero(this->server_sockets[stream_idx].read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
     }
 
 
     //todo maybe put this buffer in the struct?
-    bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
 }
 
 /**
@@ -183,22 +182,22 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
             for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {   //todo
                 /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
 //            ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
-                ssize_t ret_value = send(this->server_sockets[stream_idx].sockfd, msg, packet_size, 0);
+                ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg, packet_size, 0);
                 if (ret_value != packet_size) { print_error("send() failed", errno); }
 
                 /* Receive packet and verify the #bytes sent. */
 //            ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
-                ret_value = recv(this->server_sockets[stream_idx].sockfd, this->read_buffer, packet_size, 0);
+                ret_value = recv(this->server_sockets[stream_idx].socked_fd, this->server_sockets[stream_idx].read_buffer, packet_size, 0);
                 if (ret_value < 0) { print_error("recv() failed", errno); }
             }
 //            /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
 ////            ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
-//            ssize_t ret_value = send(tcpSocket->sockfd, msg, packet_size, 0);
+//            ssize_t ret_value = send(tcpSocket->socked_fd, msg, packet_size, 0);
 //            if (ret_value != packet_size) { print_error("send() failed", errno); }
 //
 //            /* Receive packet and verify the #bytes sent. */
 ////            ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
-//            ret_value = recv(tcpSocket->sockfd, this->read_buffer, packet_size, 0);
+//            ret_value = recv(tcpSocket->socked_fd, this->read_buffer, packet_size, 0);
 //            if (ret_value < 0) { print_error("recv() failed", errno); }
         }
 
@@ -246,14 +245,15 @@ void Client::measure_latency(TCPSocket * tcpSocket, char * msg, ssize_t packet_s
 
     /* Send 1 packet with (size_t) packet_size */
 //    ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
-//    ssize_t ret_value = send(sockfd, msg, packet_size, 0);
-    ssize_t ret_value = send(tcpSocket->sockfd, msg, packet_size, 0);
+//    ssize_t ret_value = send(socked_fd, msg, packet_size, 0);
+    ssize_t ret_value = send(tcpSocket->socked_fd, msg, packet_size, 0);
     if (ret_value != packet_size) { print_error("send() failed", errno); }
 
     /* Receive 1 packet with (size_t) packet_size */
-//    ret_value = recv(sockfd, this->read_buffer, packet_size, 0);
+//    ret_value = recv(socked_fd, this->read_buffer, packet_size, 0);
 //    ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
-    ret_value = recv(tcpSocket->sockfd, this->read_buffer, packet_size, 0);
+//    ret_value = recv(tcpSocket->socked_fd, this->read_buffer, packet_size, 0);
+    ret_value = recv(tcpSocket->socked_fd, tcpSocket->read_buffer, packet_size, 0);
     if (ret_value < 0) { print_error("recv() failed", errno); }
 
     end_time = steady_clock::now();
@@ -303,8 +303,8 @@ void Client::kill_client() {
 //    close(server_fd);
 
     for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
-        shutdown(this->server_sockets[stream_idx].sockfd, SHUT_RDWR);
-        close(this->server_sockets[stream_idx].sockfd);
+        shutdown(this->server_sockets[stream_idx].socked_fd, SHUT_RDWR);
+        close(this->server_sockets[stream_idx].socked_fd);
     }
 }
 
@@ -381,7 +381,10 @@ int main(int argc, char const *argv[]) {    //todo edit
     /* Create client object and connect to given server-ip and run tests */
 //    Client client = Client(argv[1]);
 
-
+    if(argc != 1) {
+        printf("Usage: client <IPv4 address>\n");
+        exit(EXIT_FAILURE);
+    }
     part3(argv[1], 2, false);
 
     return EXIT_SUCCESS;
