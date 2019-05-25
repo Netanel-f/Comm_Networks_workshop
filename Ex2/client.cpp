@@ -381,7 +381,7 @@ int main(int argc, char const *argv[]) {    //todo edit
     /* Create client object and connect to given server-ip and run tests */
 //    Client client = Client(argv[1]);
 
-    if(argc != 1) {
+    if(argc != 2) {
         printf("Usage: client <IPv4 address>\n");
         exit(EXIT_FAILURE);
     }
