@@ -17,7 +17,7 @@
 #include <map>
 
 #define MAX_INCOMING_QUEUE 1
-#define PORT_NUMBER 54321
+#define PORT_NUMBER 54334
 #define WARMPUP_PACKET_SIZE 1024
 
 #define MAX_PARALLEL_STREAMS 10
@@ -37,7 +37,9 @@
 #define MEGABIT_IN_BITS 1000000
 #define GIGABIT_IN_BITS 1000000000
 
-#define RESULTS_FORMAT "%ld\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
+//#define RESULTS_FORMAT "%ld\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
+// msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
+#define RESULTS_FORMAT "%ld\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 
 #define DEBUG true
 

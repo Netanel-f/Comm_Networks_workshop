@@ -79,7 +79,7 @@ int Server::getMaxFd() {
 
 
 void Server::selectPhase() {
-    if (DEBUG) { printf("DEBUG: %s\n", "select phase"); }
+    if (DEBUG) { printf("DEBUG: %s welcomesocket=%d\n", "select phase", welcome_socket); }
     /* initializing arguments for select() */
     FD_ZERO(&clients_fds);
     FD_SET(welcome_socket, &clients_fds);
@@ -188,7 +188,9 @@ void Server::killServer() {
 //    if (ret_value < 0) { print_error("close() failed.", errno); }
 
     // close welcome socket
-    int ret_value = close(this->welcome_socket);
+    FD_CLR(this->welcome_socket, &this->clients_fds);
+    int ret_value = shutdown(this->welcome_socket, SHUT_RDWR);
+//    int ret_value = close(this->welcome_socket);
     if (ret_value < 0) { print_error("close() failed.", errno); }
 }
 
