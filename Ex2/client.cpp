@@ -129,6 +129,8 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
  * Warm up the TCP/IP protocol to measure optimal results.
  */
 void Client::warm_up(TCPSocket * tcpSocket) {
+    if (DEBUG) { printf("DEBUG: %s\n", "warm up"); }
+
     char msg[WARMPUP_PACKET_SIZE];
     measure_latency(tcpSocket, msg, WARMPUP_PACKET_SIZE);
 
@@ -139,6 +141,7 @@ void Client::warm_up(TCPSocket * tcpSocket) {
     steady_clock::time_point warm_up_start_time = steady_clock::now();
 
     while (true) {
+        if (DEBUG) { printf("DEBUG: %s\n", "warm up while loop"); }
         measure_latency(tcpSocket, msg, WARMPUP_PACKET_SIZE);
 
         auto warmup_seconds = duration_cast<seconds>(steady_clock::now() - warm_up_start_time).count();
@@ -228,8 +231,9 @@ void Client::calculate_packet_rate(ssize_t packet_size) {
  */
 void Client::measure_latency(TCPSocket * tcpSocket, char * msg, ssize_t packet_size) {
     /* Reset latency_result variable */
-    tcpSocket->latency_result = 0.0;
+//    tcpSocket->latency_result = 0.0;
 //    this->latency_result = 0.0;
+    if (DEBUG) { printf("DEBUG: %s\n", "measure latency"); }
 
     /* Set chrono clocks*/
     steady_clock::time_point start_time, end_time;
@@ -306,11 +310,12 @@ void Client::print_error(const std::string& function_name, int error_number) {
  * This method will warm up the system and will run measurement tests.
  */
 void Client::run_tests(bool incremental_msg_size) {
+
     /* warm up until latency converges */
 //    warm_up();
     for (TCPSocket tcpSocket: this->server_sockets){
-    warm_up(&tcpSocket);
-
+        if (DEBUG) { printf("DEBUG: %s\n", "run tests warm up loop"); }
+        warm_up(&tcpSocket);
     }
 
     //TODO check ssize_t limit
@@ -362,6 +367,7 @@ int main(int argc, char const *argv[]) {
     /* Create client object and connect to given server-ip and run tests */
 //    Client client = Client(argv[1]);
     Client client = Client(argv[1], 1);
+    if (DEBUG) { printf("DEBUG: %s\n", "client object has been created"); }
     // Part 1:
     client.run_tests(false);
 

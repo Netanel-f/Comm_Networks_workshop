@@ -39,5 +39,6 @@
 
 #define RESULTS_FORMAT "%ld\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 
+#define DEBUG true
 
 #endif //COMM_NETS_SHARED_H

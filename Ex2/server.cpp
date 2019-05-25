@@ -79,23 +79,23 @@ int Server::getMaxFd() {
 
 
 void Server::selectPhase() {
+    if (DEBUG) { printf("DEBUG: %s\n", "select phase"); }
     /* initializing arguments for select() */
     FD_ZERO(&clients_fds);
     FD_SET(welcome_socket, &clients_fds);
-    FD_SET(STDIN_FILENO, &clients_fds);
 
     bool keep_loop_select = true;
-    int max_fd = getMaxFd();
     int num_ready_incoming_fds = 0;
 
     while (keep_loop_select) {
+        int max_fd = getMaxFd();
+        if (DEBUG) { printf("DEBUG: %s\n", "select loop"); }
         read_fds = clients_fds;
         num_ready_incoming_fds = select((max_fd + 1), &read_fds, nullptr, nullptr, nullptr);
 
         if (num_ready_incoming_fds == -1) {
             // select error
             print_error("select", errno);
-            continue;
 
         } else if (num_ready_incoming_fds == 0) {
             // None of the incoming fds is ready
@@ -118,6 +118,7 @@ void Server::selectPhase() {
         /* checking other sockets */
         for (auto client: this->clients_sockets) {
             if (FD_ISSET(client.second, &read_fds)) {
+                if (DEBUG) { printf("DEBUG: %s %d\n", "echo client", client.second); }
                 echoClient(client.second);
             }
         }
@@ -194,6 +195,7 @@ int main() {
     /* Create server object and listening to clients on welcome socket */
     Server server =  Server();
 
+    if (DEBUG) { printf("DEBUG: %s\n", "server has been created."); }
     /* Server select loop phase for handling (new/ old/ leaving) clients */
     server.selectPhase();
 
