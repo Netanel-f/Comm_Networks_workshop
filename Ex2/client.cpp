@@ -283,6 +283,14 @@ void Client::print_results(ssize_t packet_size) {
     } else {
         rate_unit = "bps";
     }
+
+    // calc total latency:
+    for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
+        this->latency_result += this->server_sockets[stream_idx].latency_result;
+    }
+
+    this->latency_result /= this->num_of_streams;
+
 //    printf(RESULTS_FORMAT, packet_size, max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second", latency_result, "milliseconds");
     // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
     printf(RESULTS_FORMAT, packet_size, this->num_of_streams, 1, latency_result, "milliseconds", max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second");
@@ -374,7 +382,7 @@ int main(int argc, char const *argv[]) {    //todo edit
 //    Client client = Client(argv[1]);
 
 
-    part3(argv[1], 1, false);
+    part3(argv[1], 2, false);
 
     return EXIT_SUCCESS;
 }

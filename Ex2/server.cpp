@@ -193,7 +193,7 @@ void Server::killServer() {
     FD_CLR(this->welcome_socket, &this->clients_fds);
     int ret_value = shutdown(this->welcome_socket, SHUT_RDWR);
 //    int ret_value = close(this->welcome_socket);
-    if (ret_value < 0) { print_error("close() failed.", errno); }
+    if (ret_value < 0) { print_error("close() failed. (welcome socket)", errno); }
 }
 
 
