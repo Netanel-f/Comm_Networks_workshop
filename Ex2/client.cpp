@@ -1,4 +1,3 @@
-
 #include <chrono>
 #include "shared.h"
 
@@ -8,25 +7,25 @@ using fp_milliseconds = std::chrono::duration<double, std::chrono::milliseconds:
 using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
 
 
+/**
+ * This struct would contain info regarding specific socket
+ */
 struct TCPSocket {
-    char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
     int socked_fd = -1;
+    char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
     double latency_result = 0.0;
 };
+
 
 /**
  * Constructor of Client class.
  */
 class Client {
     TCPSocket server_sockets[MAX_PARALLEL_STREAMS];
-//    int server_fds[MAX_PARALLEL_STREAMS] = {-1};
-//    int server_fd;  //todo remove
-//    char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
     unsigned int num_of_streams = 1;
 
 public:
     //// C-tor
-//    explicit Client(const char * serverIP); //todo remove
     explicit Client(const char * serverIP, unsigned int num_of_streams);
     //// client actions
     void run_tests(bool incremental_msg_size);
@@ -34,7 +33,6 @@ public:
 
 private:
     static void print_error(const std::string& function_name, int error_number);
-//    void warm_up();
     void warm_up(TCPSocket * tcpSocket);
     void measure_throughput(char * msg, ssize_t packet_size);
     void calculate_packet_rate(ssize_t packet_size);
@@ -46,30 +44,6 @@ private:
     double latency_result = 0.0;
 };
 
-///**
-// * Thie method will create Client Object and will connect the client to server
-// * @param serverIP - the server destination ipv4 format.
-// */
-//Client::Client(const char * serverIP) {
-//    /* setup sockets and structs */
-//    struct sockaddr_in server_address;
-//
-//    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-//    if (server_fd < 0) { print_error("socket() error", errno); }
-//
-//    memset(&server_address, 0, sizeof(server_address));
-//    server_address.sin_family = AF_INET;
-//    server_address.sin_port = htons(PORT_NUMBER);
-//
-//    int ret_value = inet_pton(AF_INET, serverIP, &server_address.sin_addr);
-//    if (ret_value <= 0) { print_error("inet_pton()", errno); }
-//
-//    ret_value = connect(server_fd, (struct sockaddr *)&server_address, sizeof(server_address));
-//    if (ret_value != 0) { print_error("connect()", errno); }
-//
-//    bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
-//}
-
 
 /**
  * Thie method will create Client Object and will connect the client to server
@@ -80,12 +54,10 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
     if (num_of_streams > MAX_PARALLEL_STREAMS) {
         print_error("num of streams is over the limit", 1);
     }
-//    server_fd = 0;  //todo remove
     this->num_of_streams = num_of_streams;
     /* setup sockets and structs */
     struct sockaddr_in server_address;
 
-    // todo do we need different port numbers?
     for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
         bool socket_creation_failed = false;
 
@@ -96,7 +68,6 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
         }
 
         server_sockets[stream_idx].socked_fd = current_socket;
-//        server_fds[stream_idx] = current_socket;
 
         memset(&server_address, 0, sizeof(server_address));
         server_address.sin_family = AF_INET;
@@ -119,13 +90,12 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
         }
         bzero(this->server_sockets[stream_idx].read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
     }
-
-
-    //todo maybe put this buffer in the struct?
 }
+
 
 /**
  * Warm up the TCP/IP protocol to measure optimal results.
+ * @param tcpSocket socket to warm
  */
 void Client::warm_up(TCPSocket * tcpSocket) {
     if (DEBUG) { printf("DEBUG: %s\n", "warm up"); }
@@ -134,7 +104,6 @@ void Client::warm_up(TCPSocket * tcpSocket) {
     measure_latency(tcpSocket, msg, WARMPUP_PACKET_SIZE);
 
     double rtt = tcpSocket->latency_result;
-//    double rtt = this->latency_result;
 
     /* Set chrono clocks*/
     steady_clock::time_point warm_up_start_time = steady_clock::now();
@@ -153,6 +122,7 @@ void Client::warm_up(TCPSocket * tcpSocket) {
     }
 }
 
+
 /**
  * This method will measure throughput of TCP socket using message with certain size to send.
  * @param msg pointer to char[packet_size]
@@ -162,7 +132,6 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
     /* Set chrono clocks*/
     steady_clock::time_point cycle_start_time, cycle_end_time;
     steady_clock::duration cycleTime;
-//    tcpSocket->max_throughput_result = 0.0;
     this->max_throughput_result = 0.0;
 
     /* init calculations */
@@ -181,24 +150,13 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
 
             for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {   //todo
                 /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
-//            ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
                 ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg, packet_size, 0);
                 if (ret_value != packet_size) { print_error("send() failed", errno); }
 
                 /* Receive packet and verify the #bytes sent. */
-//            ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
                 ret_value = recv(this->server_sockets[stream_idx].socked_fd, this->server_sockets[stream_idx].read_buffer, packet_size, 0);
                 if (ret_value < 0) { print_error("recv() failed", errno); }
             }
-//            /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
-////            ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
-//            ssize_t ret_value = send(tcpSocket->socked_fd, msg, packet_size, 0);
-//            if (ret_value != packet_size) { print_error("send() failed", errno); }
-//
-//            /* Receive packet and verify the #bytes sent. */
-////            ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
-//            ret_value = recv(tcpSocket->socked_fd, this->read_buffer, packet_size, 0);
-//            if (ret_value < 0) { print_error("recv() failed", errno); }
         }
 
         cycle_end_time  = steady_clock::now();
@@ -208,16 +166,16 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
         auto cycle_throughput = bits_transferred_per_cycle / cycle_time_seconds.count();
 
         if (cycle_throughput > this->max_throughput_result) {
-//        if (cycle_throughput > tcpSocket->max_throughput_result) {
-//            tcpSocket->max_throughput_result = cycle_throughput;
             this->max_throughput_result = cycle_throughput;
         }
     }
 }
 
+
 /**
- * This method will calculate the packet rate, based on previously throughput measured.
- */
+  * This method will calculate the packet rate, based on previously throughput measured.
+  * @param packet_size packet size to calculate by.
+  */
 void Client::calculate_packet_rate(ssize_t packet_size) {
     //todo
     this->packet_rate_result =  (this->max_throughput_result) / packet_size;
@@ -225,13 +183,12 @@ void Client::calculate_packet_rate(ssize_t packet_size) {
 
 /**
  * This method will measure latency of TCP socket using message with certain size to send.
+ * @param tcpSocket socket to measure
  * @param msg pointer to char[packet_size]
  * @param packet_size the size of message
  */
 void Client::measure_latency(TCPSocket * tcpSocket, char * msg, ssize_t packet_size) {
     /* Reset latency_result variable */
-//    tcpSocket->latency_result = 0.0;
-//    this->latency_result = 0.0;
     if (DEBUG) { printf("DEBUG: %s\n", "measure latency"); }
 
     /* Set chrono clocks*/
@@ -244,15 +201,10 @@ void Client::measure_latency(TCPSocket * tcpSocket, char * msg, ssize_t packet_s
     start_time = steady_clock::now();
 
     /* Send 1 packet with (size_t) packet_size */
-//    ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
-//    ssize_t ret_value = send(socked_fd, msg, packet_size, 0);
     ssize_t ret_value = send(tcpSocket->socked_fd, msg, packet_size, 0);
     if (ret_value != packet_size) { print_error("send() failed", errno); }
 
     /* Receive 1 packet with (size_t) packet_size */
-//    ret_value = recv(socked_fd, this->read_buffer, packet_size, 0);
-//    ret_value = recv(this->server_fd, this->read_buffer, packet_size, 0);
-//    ret_value = recv(tcpSocket->socked_fd, this->read_buffer, packet_size, 0);
     ret_value = recv(tcpSocket->socked_fd, tcpSocket->read_buffer, packet_size, 0);
     if (ret_value < 0) { print_error("recv() failed", errno); }
 
@@ -260,9 +212,9 @@ void Client::measure_latency(TCPSocket * tcpSocket, char * msg, ssize_t packet_s
 
     auto rtt = fp_milliseconds(steady_clock::duration(end_time - start_time));
     auto latency = rtt.count() / 2;
-//    this->latency_result = latency;
     tcpSocket->latency_result = latency;
 }
+
 
 /**
  * This method will print results to screen as saved in client's object.
@@ -291,7 +243,6 @@ void Client::print_results(ssize_t packet_size) {
 
     this->latency_result /= this->num_of_streams;
 
-//    printf(RESULTS_FORMAT, packet_size, max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second", latency_result, "milliseconds");
     // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
     printf(RESULTS_FORMAT, packet_size, this->num_of_streams, 1, latency_result, "milliseconds", max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second");
 }
@@ -323,14 +274,12 @@ void Client::print_error(const std::string& function_name, int error_number) {
  */
 void Client::run_tests(bool incremental_msg_size) {
 
-    /* warm up until latency converges */
-//    warm_up();
     for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) { //todo
         if (DEBUG) { printf("DEBUG: %s\n", "run tests warm up loop"); }
+        /* warm up until latency converges */
         warm_up(&(this->server_sockets[stream_idx]));
     }
 
-    //TODO check ssize_t limit
     ssize_t max_packet_size = ONE_BYTE;
 
     if (incremental_msg_size) {
@@ -339,17 +288,18 @@ void Client::run_tests(bool incremental_msg_size) {
 
     /* Measure throughput and latency , for exponential series of message sizes */
     for (ssize_t packet_size = ONE_BYTE; packet_size <= max_packet_size; packet_size = packet_size << 1u) {
+
         /* Init the packet message to send*/
         char msg[packet_size];
-
 
         /* Preforming tests and printing results */
         measure_throughput(msg, packet_size);
         calculate_packet_rate(packet_size);
+
         for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) { //todo
             measure_latency(&this->server_sockets[stream_idx], msg, packet_size);
         }
-//        measure_latency(msg, packet_size);
+
         print_results(packet_size);
     }
 }
@@ -385,7 +335,7 @@ int main(int argc, char const *argv[]) {    //todo edit
         printf("Usage: client <IPv4 address>\n");
         exit(EXIT_FAILURE);
     }
-    part3(argv[1], 2, false);
+    part3(argv[1], 2, true);
 
     return EXIT_SUCCESS;
 }
