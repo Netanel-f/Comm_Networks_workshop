@@ -143,7 +143,7 @@ void Client::warm_up(TCPSocket * tcpSocket) {
 
         auto warmup_seconds = duration_cast<seconds>(steady_clock::now() - warm_up_start_time).count();
 
-        if ((warmup_seconds > MIN_SECONDS_TO_WARMUP)&&(this->latency_result - rtt < (rtt / 100))) {
+        if ((warmup_seconds > MIN_SECONDS_TO_WARMUP)&&(tcpSocket->latency_result - rtt < (rtt / 100))) {
             // convergence detection: a minimal number to start with,
             // followed by iterations until the average changes less than 1% between iterations...
             break;
