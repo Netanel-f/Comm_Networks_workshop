@@ -4,11 +4,8 @@
 
 class Server {
     int welcome_socket;
-    int client_fd;  //TODO remove
     bool keep_loop_select = true;
-
     char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
-    //char write_buffer[WARMPUP_PACKET_SIZE + 1] = "0"; // todo remove
 
     // clients sockets
     std::map<std::string, int> clients_sockets;
@@ -20,8 +17,7 @@ public:
     Server();
     //// server actions
     void selectPhase();
-    void echoClient(int ec_client_fd); //todo change to client_fd
-    void echo();
+    void echoClient(int client_fd);
     void killServer();
 
 private:
@@ -57,16 +53,7 @@ Server::Server() {
     ret_value = listen(welcome_socket, MAX_INCOMING_QUEUE);
     if (ret_value < 0) { print_error("listen", errno); }
 
-//    // TODO remove
-//    // accepting socket - server will enter BLOCKING STATE until client connects.
-//    ret_value = accept(welcome_socket, nullptr, nullptr);
-//
-//    if (ret_value < 0) { print_error("accept", errno); }
-//
-//    this->client_fd = ret_value;
-
     bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);
-//    bzero(this->write_buffer, WARMPUP_PACKET_SIZE + 1);
 }
 
 
@@ -85,7 +72,6 @@ void Server::selectPhase() {
     FD_ZERO(&clients_fds);
     FD_SET(welcome_socket, &clients_fds);
 
-//    bool keep_loop_select = true;
     int num_ready_incoming_fds = 0;
 
     while (keep_loop_select) {
@@ -102,14 +88,16 @@ void Server::selectPhase() {
             // None of the incoming fds is ready
             continue;
         }
-        // at least one incoming fd is ready
 
-        /* new client arrived welcome */
+        /* at least one incoming fd is ready */
+
         if (FD_ISSET(welcome_socket, &read_fds)) {
+            /* new client arrived welcome */
             // accepting socket - server will enter BLOCKING STATE until client connects.
             int new_client_socket = accept(welcome_socket, nullptr, nullptr);
             if (new_client_socket < 0) {
                 print_error("accept", errno);
+
             } else {
                 FD_SET(new_client_socket, &clients_fds);
                 clients_sockets.emplace(std::to_string(new_client_socket), new_client_socket);
@@ -120,6 +108,8 @@ void Server::selectPhase() {
         if (!this->clients_sockets.empty()) {
             for (auto client: this->clients_sockets) {
                 if (FD_ISSET(client.second, &read_fds)) {
+
+                    /* Echo back client's messages */
                     if (DEBUG) { printf("DEBUG: %s %d\n", "echo client", client.second); }
                     echoClient(client.second);
                 }
@@ -129,9 +119,12 @@ void Server::selectPhase() {
 
 }
 
-
-void Server::echoClient(int ec_client_fd) {
-    ssize_t ret_value = recv(ec_client_fd, this->read_buffer, (size_t) WARMPUP_PACKET_SIZE, 0);
+/**
+ * This method will echo to specific client fd
+ * @param client_fd client socket fd to echo.
+ */
+void Server::echoClient(int client_fd) {
+    ssize_t ret_value = recv(client_fd, this->read_buffer, (size_t) WARMPUP_PACKET_SIZE, 0);
     if (ret_value < 0) { print_error("recv() failed", errno); }
 
     /* return value == 0:
@@ -141,43 +134,26 @@ void Server::echoClient(int ec_client_fd) {
      * the return value will be 0 (the traditional "end-of-file" return). */
     if (ret_value == 0) {
         // close client socket
-        FD_CLR(ec_client_fd, &this->clients_fds);
-        ret_value = shutdown(ec_client_fd, SHUT_RDWR);
-        ret_value = close(ec_client_fd);
+        FD_CLR(client_fd, &this->clients_fds);
+
+        ret_value = shutdown(client_fd, SHUT_RDWR);
+        if (ret_value < 0) { print_error("shutdown() failed.", errno); }
+
+        ret_value = close(client_fd);
         if (ret_value < 0) { print_error("close() failed.", errno); }
 
-        this->clients_sockets.erase(std::to_string(ec_client_fd));
+        this->clients_sockets.erase(std::to_string(client_fd));
+
         if (this->clients_sockets.empty()) {
             this->keep_loop_select = false;
             killServer();
         }
+
     } else {
-        ret_value = send(ec_client_fd, this->read_buffer, (size_t) ret_value, 0);
+        ret_value = send(client_fd, this->read_buffer, (size_t) ret_value, 0);
         if (ret_value < 0) { print_error("send() failed", errno); }
     }
 
-}
-
-
-/**
- * This method will echo back the client with the message it sent.
- */
-void Server::echo() {
-    while (true) {
-        /* keep loop until client closed the socket. */
-        ssize_t ret_value = recv(this->client_fd, this->read_buffer, (size_t) WARMPUP_PACKET_SIZE, 0);
-        if (ret_value < 0) { print_error("recv() failed", errno); }
-
-        /* return value == 0:
-         * Means we didn't read anything from client - we assume client closed the socket.
-         * Quote from recv() manual:
-         * When a stream socket peer has performed an orderly shutdown,
-         * the return value will be 0 (the traditional "end-of-file" return). */
-        if (ret_value == 0) { return; }
-
-        ret_value = send(this->client_fd, this->read_buffer, (size_t) ret_value, 0);
-        if (ret_value < 0) { print_error("send() failed", errno); }
-    }
 }
 
 
@@ -185,16 +161,10 @@ void Server::echo() {
  * close the open sockets.
  */
 void Server::killServer() {
-//    // close client socket
-//    int ret_value = close(this->client_fd);
-//    if (ret_value < 0) { print_error("close() failed.", errno); }
-
-    // close welcome socket
+    /* close welcome socket */
     FD_CLR(this->welcome_socket, &this->clients_fds);
-    int ret_value = shutdown(this->welcome_socket, SHUT_RDWR);
-//todo check
-//    int ret_value = close(this->welcome_socket);
-//    if (ret_value < 0) { print_error("close() failed. (welcome socket)", errno); }
+    shutdown(this->welcome_socket, SHUT_RDWR);
+    close(this->welcome_socket);
 }
 
 
@@ -214,14 +184,13 @@ int main() {
     Server server =  Server();
 
     if (DEBUG) { printf("DEBUG: %s\n", "server has been created."); }
+
     /* Server select loop phase for handling (new/ old/ leaving) clients */
     server.selectPhase();
 
-    /* Echo back client's messages */
-//    server.echo();
 
     /* Close open sockets and close server */
     server.killServer();
-    // TODO time out if no clients arrived on time
+    // TODO time out if no clients arrived on time ?
     return EXIT_SUCCESS;
 }
