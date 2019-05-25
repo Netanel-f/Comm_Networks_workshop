@@ -142,8 +142,8 @@ void Server::echoClient(int ec_client_fd) {
     if (ret_value == 0) {
         // close client socket
         FD_CLR(ec_client_fd, &this->clients_fds);
-//        ret_value = close(ec_client_fd);
         ret_value = shutdown(ec_client_fd, SHUT_RDWR);
+        ret_value = close(ec_client_fd);
         if (ret_value < 0) { print_error("close() failed.", errno); }
 
         this->clients_sockets.erase(std::to_string(ec_client_fd));
@@ -192,8 +192,9 @@ void Server::killServer() {
     // close welcome socket
     FD_CLR(this->welcome_socket, &this->clients_fds);
     int ret_value = shutdown(this->welcome_socket, SHUT_RDWR);
+//todo check
 //    int ret_value = close(this->welcome_socket);
-    if (ret_value < 0) { print_error("close() failed. (welcome socket)", errno); }
+//    if (ret_value < 0) { print_error("close() failed. (welcome socket)", errno); }
 }
 
 
