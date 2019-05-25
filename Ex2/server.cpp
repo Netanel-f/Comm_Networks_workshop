@@ -5,6 +5,7 @@
 class Server {
     int welcome_socket;
     int client_fd;  //TODO remove
+    bool keep_loop_select = true;
 
     char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
     //char write_buffer[WARMPUP_PACKET_SIZE + 1] = "0"; // todo remove
@@ -84,7 +85,7 @@ void Server::selectPhase() {
     FD_ZERO(&clients_fds);
     FD_SET(welcome_socket, &clients_fds);
 
-    bool keep_loop_select = true;
+//    bool keep_loop_select = true;
     int num_ready_incoming_fds = 0;
 
     while (keep_loop_select) {
@@ -147,6 +148,7 @@ void Server::echoClient(int ec_client_fd) {
 
         this->clients_sockets.erase(std::to_string(ec_client_fd));
         if (this->clients_sockets.empty()) {
+            this->keep_loop_select = false;
             killServer();
         }
     } else {
