@@ -293,7 +293,8 @@ void Client::kill_client() {
 //    close(server_fd);
 
     for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
-        close(this->server_sockets[stream_idx].sockfd);
+//        close(this->server_sockets[stream_idx].sockfd);
+        shutdown(this->server_sockets[stream_idx].sockfd, SHUT_RDWR);
     }
 }
 
