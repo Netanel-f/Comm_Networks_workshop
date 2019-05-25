@@ -87,7 +87,7 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
     struct sockaddr_in server_address;
 
     // todo do we need different port numbers?
-    for (int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
+    for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
         bool socket_creation_failed = false;
 
         int current_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -177,7 +177,7 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
         /* Sending continuously pre defined # of packets */
         for (int packet_index = 0; packet_index < RTT_PACKETS_PER_CYCLE; packet_index++) {
 
-            for (int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {   //todo
+            for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {   //todo
                 /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
 //            ssize_t ret_value = send(this->server_fd, msg, packet_size, 0);
                 ssize_t ret_value = send(this->server_sockets[stream_idx].sockfd, msg, packet_size, 0);
@@ -329,7 +329,7 @@ void Client::run_tests(bool incremental_msg_size) {
         /* Preforming tests and printing results */
         measure_throughput(msg, packet_size);
         calculate_packet_rate(packet_size);
-        for (int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) { //todo
+        for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) { //todo
         measure_latency(&this->server_sockets[stream_idx], msg, packet_size);
         }
 //        measure_latency(msg, packet_size);
