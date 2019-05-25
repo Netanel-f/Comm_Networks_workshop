@@ -291,8 +291,9 @@ void Client::print_results(ssize_t packet_size) {
  */
 void Client::kill_client() {
 //    close(server_fd);
-    for (TCPSocket tcpSocket: this->server_sockets){
-        close(tcpSocket.sockfd);
+
+    for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
+        close(this->server_sockets[stream_idx].sockfd);
     }
 }
 
@@ -313,9 +314,9 @@ void Client::run_tests(bool incremental_msg_size) {
 
     /* warm up until latency converges */
 //    warm_up();
-    for (TCPSocket tcpSocket: this->server_sockets){
+    for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) { //todo
         if (DEBUG) { printf("DEBUG: %s\n", "run tests warm up loop"); }
-        warm_up(&tcpSocket);
+        warm_up(&(this->server_sockets[stream_idx]));
     }
 
     //TODO check ssize_t limit
@@ -335,7 +336,7 @@ void Client::run_tests(bool incremental_msg_size) {
         measure_throughput(msg, packet_size);
         calculate_packet_rate(packet_size);
         for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) { //todo
-        measure_latency(&this->server_sockets[stream_idx], msg, packet_size);
+            measure_latency(&this->server_sockets[stream_idx], msg, packet_size);
         }
 //        measure_latency(msg, packet_size);
         print_results(packet_size);

@@ -116,13 +116,14 @@ void Server::selectPhase() {
         }
 
         /* checking other sockets */
-        for (auto client: this->clients_sockets) {
-            if (FD_ISSET(client.second, &read_fds)) {
-                if (DEBUG) { printf("DEBUG: %s %d\n", "echo client", client.second); }
-                echoClient(client.second);
+        if (!this->clients_sockets.empty()) {
+            for (auto client: this->clients_sockets) {
+                if (FD_ISSET(client.second, &read_fds)) {
+                    if (DEBUG) { printf("DEBUG: %s %d\n", "echo client", client.second); }
+                    echoClient(client.second);
+                }
             }
         }
-
     }
 
 }
@@ -137,7 +138,17 @@ void Server::echoClient(int ec_client_fd) {
      * Quote from recv() manual:
      * When a stream socket peer has performed an orderly shutdown,
      * the return value will be 0 (the traditional "end-of-file" return). */
-    if (ret_value == 0) { return; }
+    if (ret_value == 0) {
+        // close client socket
+        FD_CLR(ec_client_fd, &this->clients_fds);
+        ret_value = close(ec_client_fd);
+        if (ret_value < 0) { print_error("close() failed.", errno); }
+
+        this->clients_sockets.erase(std::to_string(ec_client_fd));
+        if (this->clients_sockets.empty()) {
+            killServer();
+        }
+    }
 
     ret_value = send(ec_client_fd, this->read_buffer, (size_t) ret_value, 0);
     if (ret_value < 0) { print_error("send() failed", errno); }
@@ -170,12 +181,12 @@ void Server::echo() {
  * close the open sockets.
  */
 void Server::killServer() {
-    // close client socket
-    int ret_value = close(this->client_fd);
-    if (ret_value < 0) { print_error("close() failed.", errno); }
+//    // close client socket
+//    int ret_value = close(this->client_fd);
+//    if (ret_value < 0) { print_error("close() failed.", errno); }
 
     // close welcome socket
-    ret_value = close(this->welcome_socket);
+    int ret_value = close(this->welcome_socket);
     if (ret_value < 0) { print_error("close() failed.", errno); }
 }
 
