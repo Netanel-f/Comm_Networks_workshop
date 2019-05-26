@@ -19,8 +19,8 @@
 
 using namespace std::chrono;
 
-#define MAX_INCOMING_QUEUE 1
-#define PORT_NUMBER 54323
+#define MAX_INCOMING_QUEUE 10
+#define PORT_NUMBER 54325
 #define WARMUP_PACKET_SIZE 1024
 #define MAX_PACKET_SIZE_BYTES 1048576
 
@@ -28,8 +28,10 @@ using namespace std::chrono;
 
 #define MIN_SECONDS_TO_WARMUP 20
 
-#define RTT_PACKETS_PER_CYCLE 1000
-#define RTT_NUM_OF_CYCLES 100
+#define RTT_PACKETS_PER_CYCLE 100
+#define RTT_NUM_OF_CYCLES 10
+//#define RTT_PACKETS_PER_CYCLE 1000
+//#define RTT_NUM_OF_CYCLES 100
 #define BYTES_TO_BITS 8
 
 

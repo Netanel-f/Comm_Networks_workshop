@@ -42,6 +42,7 @@ Server::Server() {
     if (welcome_socket < 0) { print_error("socket() error", errno); }
 
     int enable = 1;
+    //todo del before submit
 //    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0){
     if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0){
         print_error("setsockopt", errno);

@@ -148,7 +148,7 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
     this->max_throughput_result = 0.0;
 
     /* init calculations */
-    auto cycle_bytes_transferred = 2* RTT_PACKETS_PER_CYCLE * packet_size;
+    auto cycle_bytes_transferred = this->num_of_streams * 2 * RTT_PACKETS_PER_CYCLE * packet_size;
     auto bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
 
     /* Init the packet message to send*/
