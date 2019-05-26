@@ -20,7 +20,7 @@
 using namespace std::chrono;
 
 #define MAX_INCOMING_QUEUE 10
-#define PORT_NUMBER 54325
+#define PORT_NUMBER 54327
 #define WARMUP_PACKET_SIZE 1024
 #define MAX_PACKET_SIZE_BYTES 1048576
 
@@ -49,6 +49,6 @@ using namespace std::chrono;
 #define RESULTS_HEADER "Msg size:\t#Sockets:\t#Threads:\tTotal latency:\tTotal throughput:\tTotal packet rate:\n"
 #define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 
-#define DEBUG false
+#define DEBUG true
 
 #endif //COMM_NETS_SHARED_H

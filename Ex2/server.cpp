@@ -90,7 +90,6 @@ void Server::selectPhase() {
 //        }
 
         int max_fd = getMaxFd();
-        if (DEBUG) { printf("DEBUG: %s\n", "select loop"); }
         read_fds = clients_fds;
         struct timeval tv_timeout = {10, 0}; // 10 seconds time out
         num_ready_incoming_fds = select((max_fd + 1), &read_fds, nullptr, nullptr, &tv_timeout);
