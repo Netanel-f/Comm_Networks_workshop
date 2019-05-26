@@ -1,11 +1,14 @@
 #include <algorithm>
+#include <chrono>
 #include "shared.h"
 
 
 class Server {
     int welcome_socket;
-    bool keep_loop_select = true;
     char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
+    bool keep_loop_select = true;
+    bool server_was_used = false;
+    steady_clock::time_point last_socket_disconnection_timestamp;
 
     // clients sockets
     std::map<std::string, int> clients_sockets;
@@ -75,6 +78,13 @@ void Server::selectPhase() {
     int num_ready_incoming_fds = 0;
 
     while (keep_loop_select) {
+        //todo debug
+        auto seconds_idle = duration_cast<seconds>(steady_clock::now() - this->last_socket_disconnection_timestamp).count();
+        if (server_was_used && seconds_idle > 10) {
+            keep_loop_select = false;
+            break;
+        }
+
         int max_fd = getMaxFd();
         if (DEBUG) { printf("DEBUG: %s\n", "select loop"); }
         read_fds = clients_fds;
@@ -101,6 +111,7 @@ void Server::selectPhase() {
             } else {
                 FD_SET(new_client_socket, &clients_fds);
                 clients_sockets.emplace(std::to_string(new_client_socket), new_client_socket);
+                this->server_was_used = true;
             }
         }
 
@@ -144,10 +155,10 @@ void Server::echoClient(int client_fd) {
 
         this->clients_sockets.erase(std::to_string(client_fd));
 
-        if (this->clients_sockets.empty()) {
-            this->keep_loop_select = false;
-            killServer();
-        }
+//        if (this->clients_sockets.empty()) {
+//            this->keep_loop_select = false;
+//            killServer();
+//        }
 
     } else {
         ret_value = send(client_fd, this->read_buffer, (size_t) ret_value, 0);

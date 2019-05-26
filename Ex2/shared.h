@@ -16,6 +16,8 @@
 #include <vector>
 #include <map>
 
+using namespace std::chrono;
+
 #define MAX_INCOMING_QUEUE 1
 #define PORT_NUMBER 54334
 #define WARMPUP_PACKET_SIZE 1024
@@ -39,6 +41,7 @@
 
 //#define RESULTS_FORMAT "%ld\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
+#define RESULTS_HEADER "Msg size:\t#Sockets:\t#Threads:\tTotal latency:\tTotal throughput:\tTotal packet rate:"
 #define RESULTS_FORMAT "%ld\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 
 #define DEBUG false

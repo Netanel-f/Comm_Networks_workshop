@@ -2,7 +2,6 @@
 #include "shared.h"
 
 
-using namespace std::chrono;
 using fp_milliseconds = std::chrono::duration<double, std::chrono::milliseconds::period>;
 using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
 
@@ -300,6 +299,8 @@ void Client::run_tests(bool incremental_msg_size) {
             measure_latency(&this->server_sockets[stream_idx], msg, packet_size);
         }
 
+        if (packet_size == ONE_BYTE) { printf(RESULTS_HEADER); }
+
         print_results(packet_size);
     }
 }
@@ -316,14 +317,20 @@ void part1(const char * serverIP) {
     client.kill_client();
 }
 
-void part3(const char * serverIP, unsigned int num_of_streams, bool incremental) {
-    /* Create client object and connect to given server-ip and run tests */
-    Client client = Client(serverIP, num_of_streams);
+void part3(const char * serverIP, bool multiStreams, bool incMsgSize) {
 
-    client.run_tests(incremental);
+    unsigned int max_streams = 1;
+    if (multiStreams) { max_streams = MAX_PARALLEL_STREAMS; }
 
-    /* Close client and disconnect from server */
-    client.kill_client();
+    for (unsigned int num_of_streams = 1; num_of_streams < max_streams; num_of_streams++) {
+        /* Create client object and connect to given server-ip and run tests */
+        Client client = Client(serverIP, num_of_streams);
+
+        client.run_tests(incMsgSize);
+
+        /* Close client and disconnect from server */
+        client.kill_client();
+    }
 }
 
 
@@ -335,7 +342,8 @@ int main(int argc, char const *argv[]) {    //todo edit
         printf("Usage: client <IPv4 address>\n");
         exit(EXIT_FAILURE);
     }
-    part3(argv[1], 2, true);
+
+    part3(serverIP = argv[1], multiSteams=true, incMsgSize=true);
 
     return EXIT_SUCCESS;
 }
