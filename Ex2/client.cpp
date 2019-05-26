@@ -1,8 +1,11 @@
+#include <fstream>
 #include "shared.h"
 
 
 using fp_milliseconds = std::chrono::duration<double, std::chrono::milliseconds::period>;
 using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
+
+#define SAVE_RESULTS_TO_CSV false
 
 
 /**
@@ -22,6 +25,7 @@ struct TCPSocket {
 class Client {
     TCPSocket server_sockets[MAX_PARALLEL_STREAMS];
     unsigned int num_of_streams = 1;
+    unsigned int num_of_threads = 1;
 
 public:
     //// C-tor
@@ -41,6 +45,7 @@ private:
     double max_throughput_result = 0.0;
     double packet_rate_result = 0.0;
     double latency_result = 0.0;
+    std::ofstream results_file;
 };
 
 
@@ -57,7 +62,15 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
     /* setup sockets and structs */
     struct sockaddr_in server_address;
 
+    if (SAVE_RESULTS_TO_CSV) {
+        /* open csv file */
+        this->results_file.open("tcp.csv", std::ofstream::app);
+        //todo fix this line
+        this->results_file << "Message size,#sockets,#threads,Total latency,Total throughput,Total packet rate,\n";
+    }
+
     for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
+        printf("ste %u\n", stream_idx);
         bool socket_creation_failed = false;
 
         int current_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -223,10 +236,10 @@ void Client::measure_latency(TCPSocket * tcpSocket, char * msg, ssize_t packet_s
 void Client::print_results(ssize_t packet_size) {
     /* Adjusting packet size units */
     std::string packet_unit;
-    if (packet_size > MEGABYTE_IN_BYTES) {
+    if (packet_size >= MEGABYTE_IN_BYTES) {
         packet_size /= MEGABYTE_IN_BYTES;
         packet_unit = "MB";
-    } else if (packet_size > MEGABYTE_IN_KILOBYTES) {
+    } else if (packet_size >= MEGABYTE_IN_KILOBYTES) {
         packet_size /= MEGABYTE_IN_KILOBYTES;
         packet_unit = "KB";
     } else {
@@ -236,13 +249,13 @@ void Client::print_results(ssize_t packet_size) {
 
     /* Adjusting maximal throughput measured result*/
     std::string rate_unit;
-    if (max_throughput_result > GIGABIT_IN_BITS) {
+    if (max_throughput_result >= GIGABIT_IN_BITS) {
         max_throughput_result = max_throughput_result / GIGABIT_IN_BITS;
         rate_unit = "Gbps";
-    } else if (max_throughput_result > MEGABIT_IN_BITS) {
+    } else if (max_throughput_result >= MEGABIT_IN_BITS) {
         rate_unit = "Mbps";
         max_throughput_result = max_throughput_result / MEGABIT_IN_BITS;
-    } else if (max_throughput_result > KILOBIT_IN_BITS) {
+    } else if (max_throughput_result >= KILOBIT_IN_BITS) {
         max_throughput_result = max_throughput_result / KILOBIT_IN_BITS;
         rate_unit = "Kbps";
     } else {
@@ -256,8 +269,20 @@ void Client::print_results(ssize_t packet_size) {
 
     this->latency_result /= this->num_of_streams;
 
-    // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
-    printf(RESULTS_FORMAT, packet_size, packet_unit.c_str(),  this->num_of_streams, 1, latency_result, "milliseconds", max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second");
+    if (SAVE_RESULTS_TO_CSV) {
+        this->results_file << packet_size << " " << packet_unit << ",";
+        this->results_file << this->num_of_streams << ",";
+        this->results_file << this->num_of_threads << ",";
+        this->results_file << this->latency_result << " " << "milliseconds" << ",";
+        this->results_file << this->max_throughput_result << " " << rate_unit << ",";
+        this->results_file << this->packet_rate_result << " " << "packets/second" << ",";
+        this->results_file << std::endl;
+    } else {
+        // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
+        printf(RESULTS_FORMAT, packet_size, packet_unit.c_str(), this->num_of_streams,
+                this->num_of_threads, this->latency_result, "milliseconds",
+                max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second");
+    }
 }
 
 /**
@@ -265,6 +290,9 @@ void Client::print_results(ssize_t packet_size) {
  */
 void Client::kill_client() {
 //    close(server_fd);
+    this->results_file.flush();
+    this->results_file.close();
+
 
     for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
         delete(this->server_sockets[stream_idx].read_buffer);
@@ -314,8 +342,9 @@ void Client::run_tests(bool incremental_msg_size) {
             measure_latency(&this->server_sockets[stream_idx], msg, packet_size);
         }
 
-        if (packet_size == ONE_BYTE) { printf(RESULTS_HEADER); }
 
+//todo delete
+//        if (packet_size == ONE_BYTE) { printf(RESULTS_HEADER); }
         print_results(packet_size);
     }
 }
@@ -358,10 +387,10 @@ int main(int argc, char const *argv[]) {    //todo edit
         exit(EXIT_FAILURE);
     }
 
-    part3(argv[1], false, false);
-    part3(argv[1], false, true);
+//    part3(argv[1], false, false);
+//    part3(argv[1], false, true);
     part3(argv[1], true, false);
-    part3(argv[1], true, true);
+//    part3(argv[1], true, true);
 
     return EXIT_SUCCESS;
 }

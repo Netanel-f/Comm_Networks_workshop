@@ -42,7 +42,8 @@ Server::Server() {
     if (welcome_socket < 0) { print_error("socket() error", errno); }
 
     int enable = 1;
-    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0){
+//    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0){
+    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0){
         print_error("setsockopt", errno);
     }
 
@@ -82,6 +83,7 @@ void Server::selectPhase() {
         //todo debug
         auto seconds_idle = duration_cast<seconds>(steady_clock::now() - this->last_socket_activity_timestamp).count();
         if (this->server_can_shutdown && seconds_idle > 10) {
+            printf("seconds %ld\n", seconds_idle);
             keep_loop_select = false;
             break;
         }
@@ -177,6 +179,8 @@ void Server::echoClient(int client_fd) {
 void Server::killServer() {
     /* deleted buffer */
     delete(this->read_buffer);
+
+    fflush(stdout); //todo delete
 
     /* close welcome socket */
     FD_CLR(this->welcome_socket, &this->clients_fds);
