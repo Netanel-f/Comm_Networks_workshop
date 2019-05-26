@@ -494,6 +494,7 @@ void part3(const char * serverIP, bool multiStreams, bool incMsgSize) {
 
         /* Close client and disconnect from server */
         client.kill_client();
+        sleep(5);
     }
 }
 

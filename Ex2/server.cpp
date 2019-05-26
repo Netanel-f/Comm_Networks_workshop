@@ -81,7 +81,7 @@ void Server::selectPhase() {
     while (keep_loop_select) {
         int max_fd = getMaxFd();
         read_fds = clients_fds;
-        struct timeval tv_timeout = {10, 0}; // 10 seconds time out
+        struct timeval tv_timeout = {30, 0}; // 30 seconds time out
         num_ready_incoming_fds = select((max_fd + 1), &read_fds, nullptr, nullptr, &tv_timeout);
 
         if (num_ready_incoming_fds == -1) {
