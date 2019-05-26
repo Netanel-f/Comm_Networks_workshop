@@ -111,7 +111,6 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
  * @param tcpSocket socket to warm
  */
 void Client::warm_up(TCPSocket * tcpSocket) {
-    if (DEBUG) { printf("DEBUG: %s\n", "warm up"); }
 
     char msg[WARMUP_PACKET_SIZE];
     measure_latency(tcpSocket, msg, WARMUP_PACKET_SIZE);
@@ -122,7 +121,6 @@ void Client::warm_up(TCPSocket * tcpSocket) {
     steady_clock::time_point warm_up_start_time = steady_clock::now();
 
     while (true) {
-        if (DEBUG) { printf("DEBUG: %s\n", "warm up while loop"); }
         measure_latency(tcpSocket, msg, WARMUP_PACKET_SIZE);
 
         auto warmup_seconds = duration_cast<seconds>(steady_clock::now() - warm_up_start_time).count();
@@ -202,7 +200,6 @@ void Client::calculate_packet_rate(ssize_t packet_size) {
  */
 void Client::measure_latency(TCPSocket * tcpSocket, char * msg, ssize_t packet_size) {
     /* Reset latency_result variable */
-    if (DEBUG) { printf("DEBUG: %s\n", "measure latency"); }
 
     /* Set chrono clocks*/
     steady_clock::time_point start_time, end_time;
@@ -317,7 +314,6 @@ void Client::print_error(const std::string& function_name, int error_number) {
 void Client::run_tests(bool incremental_msg_size) {
 
     for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) { //todo
-        if (DEBUG) { printf("DEBUG: %s\n", "run tests warm up loop"); }
         /* warm up until latency converges */
         warm_up(&(this->server_sockets[stream_idx]));
     }
@@ -353,7 +349,6 @@ void part1(const char * serverIP) {
 
     /* Create client object and connect to given server-ip and run tests */
     Client client = Client(serverIP, 1);
-    if (DEBUG) { printf("DEBUG: %s\n", "client object has been created"); }
 
     client.run_tests(false);
 
@@ -387,17 +382,18 @@ int main(int argc, char const *argv[]) {    //todo edit
 //        exit(EXIT_FAILURE);
 //    }
 
+    part3(argv[1], false, false);
 //todo delete DEBUG ONLY
-    if (strcmp(argv[2], "1") == 0) {
-        part3(argv[1], false, false);
-    } else if (strcmp(argv[2], "2") == 0) {
-        part3(argv[1], false, true);
-    } else if (strcmp(argv[2], "3") == 0) {
-        part3(argv[1], true, false);
-    } else if (strcmp(argv[2], "4") == 0) {
-        part3(argv[1], true, true);
-
-    }
+//    if (strcmp(argv[2], "1") == 0) {
+//        part3(argv[1], false, false);
+//    } else if (strcmp(argv[2], "2") == 0) {
+//        part3(argv[1], false, true);
+//    } else if (strcmp(argv[2], "3") == 0) {
+//        part3(argv[1], true, false);
+//    } else if (strcmp(argv[2], "4") == 0) {
+//        part3(argv[1], true, true);
+//
+//    }
 
     return EXIT_SUCCESS;
 }
