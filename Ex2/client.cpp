@@ -320,7 +320,7 @@ void part1(const char * serverIP) {
 }
 
 void part3(const char * serverIP, bool multiStreams, bool incMsgSize) {
-    printf("testing multi-streams: %s, increamental size: %s", (multiStreams ? "true" : "false"), (incMsgSize ? "true" : "false"));
+    printf("\n**testing multi-streams: %s, increamental size: %s**\n", (multiStreams ? "true" : "false"), (incMsgSize ? "true" : "false"));
     unsigned int max_streams = 1;
     if (multiStreams) { max_streams = MAX_PARALLEL_STREAMS; }
 
