@@ -17,7 +17,8 @@ struct TCPSocket {
     double latency_result = 0.0;
     int packet_sent = 0;
     int packet_received = 0;
-    bool cycle_done = false;
+    bool send = true;
+    bool receive = false;
 };
 
 
@@ -195,26 +196,31 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
                 if (DEBUG) { printf("**incoming = %d\n", num_ready_incoming_fds); }
                 for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
                     int current_socket = this->server_sockets[stream_idx].socked_fd;
-                    if (FD_ISSET(current_socket, &w_streams) && !this->server_sockets[stream_idx].cycle_done) {
+                    if (FD_ISSET(current_socket, &w_streams) && this->server_sockets[stream_idx].send) {
                         if (DEBUG) { printf("**socked %d in write\n", current_socket); }
                         ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg,
                                                  packet_size, 0);
                         if (ret_value != packet_size) { print_error("send() failed", errno); }
                         this->server_sockets[stream_idx].packet_sent++;
+                        this->server_sockets[stream_idx].send = false;
+                        this->server_sockets[stream_idx].receive = true;
 
-                    } else if (FD_ISSET(current_socket, &r_streams)) {
+
+                    } else if (FD_ISSET(current_socket, &r_streams) && this->server_sockets[stream_idx].receive) {
                         if (DEBUG) { printf("**socked %d in read\n", current_socket); }
                         ssize_t ret_value = recv(this->server_sockets[stream_idx].socked_fd,
                                                  this->server_sockets[stream_idx].read_buffer,
                                                  packet_size, 0);
                         if (ret_value < 0) { print_error("recv() failed", errno); }
                         this->server_sockets[stream_idx].packet_received++;
+                        this->server_sockets[stream_idx].receive = false;
 
                         if (this->server_sockets[stream_idx].packet_received == RTT_PACKETS_PER_CYCLE) {
                             this->server_sockets[stream_idx].packet_sent = 0;
                             this->server_sockets[stream_idx].packet_received = 0;
-                            this->server_sockets[stream_idx].cycle_done = true;
                             done_cycle++;
+                        } else {
+                            this->server_sockets[stream_idx].send = true;
                         }
                     }
                 }
