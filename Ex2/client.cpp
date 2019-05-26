@@ -1,4 +1,3 @@
-#include <chrono>
 #include "shared.h"
 
 
@@ -11,7 +10,8 @@ using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
  */
 struct TCPSocket {
     int socked_fd = -1;
-    char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
+    char * read_buffer;
+//    char read_buffer[MAX_PACKET_SIZE_BYTES + 1] = "0";
     double latency_result = 0.0;
 };
 
@@ -87,7 +87,8 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
         if (socket_creation_failed) {
             stream_idx--;
         }
-        bzero(this->server_sockets[stream_idx].read_buffer, WARMPUP_PACKET_SIZE + 1);  // clear read_buffer
+        this->server_sockets[stream_idx].read_buffer = new char[MAX_PACKET_SIZE_BYTES + 1];
+        bzero(this->server_sockets[stream_idx].read_buffer, MAX_PACKET_SIZE_BYTES + 1);  // clear read_buffer
     }
 }
 
@@ -99,8 +100,8 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
 void Client::warm_up(TCPSocket * tcpSocket) {
     if (DEBUG) { printf("DEBUG: %s\n", "warm up"); }
 
-    char msg[WARMPUP_PACKET_SIZE];
-    measure_latency(tcpSocket, msg, WARMPUP_PACKET_SIZE);
+    char msg[WARMUP_PACKET_SIZE];
+    measure_latency(tcpSocket, msg, WARMUP_PACKET_SIZE);
 
     double rtt = tcpSocket->latency_result;
 
@@ -109,7 +110,7 @@ void Client::warm_up(TCPSocket * tcpSocket) {
 
     while (true) {
         if (DEBUG) { printf("DEBUG: %s\n", "warm up while loop"); }
-        measure_latency(tcpSocket, msg, WARMPUP_PACKET_SIZE);
+        measure_latency(tcpSocket, msg, WARMUP_PACKET_SIZE);
 
         auto warmup_seconds = duration_cast<seconds>(steady_clock::now() - warm_up_start_time).count();
 
@@ -322,7 +323,7 @@ void part3(const char * serverIP, bool multiStreams, bool incMsgSize) {
     unsigned int max_streams = 1;
     if (multiStreams) { max_streams = MAX_PARALLEL_STREAMS; }
 
-    for (unsigned int num_of_streams = 1; num_of_streams < max_streams; num_of_streams++) {
+    for (unsigned int num_of_streams = 1; num_of_streams <= max_streams; num_of_streams++) {
         /* Create client object and connect to given server-ip and run tests */
         Client client = Client(serverIP, num_of_streams);
 

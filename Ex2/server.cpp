@@ -1,11 +1,11 @@
 #include <algorithm>
-#include <chrono>
 #include "shared.h"
 
 
 class Server {
     int welcome_socket;
-    char read_buffer[WARMPUP_PACKET_SIZE + 1] = "0";
+    char * read_buffer;
+//    char read_buffer[MAX_PACKET_SIZE_BYTES + 1] = "0";
     bool keep_loop_select = true;
     bool server_can_shutdown = false;
     steady_clock::time_point last_socket_activity_timestamp;
@@ -56,7 +56,8 @@ Server::Server() {
     ret_value = listen(welcome_socket, MAX_INCOMING_QUEUE);
     if (ret_value < 0) { print_error("listen", errno); }
 
-    bzero(this->read_buffer, WARMPUP_PACKET_SIZE + 1);
+    this->read_buffer = new char[MAX_PACKET_SIZE_BYTES + 1];
+    bzero(this->read_buffer, MAX_PACKET_SIZE_BYTES + 1);
 }
 
 
@@ -136,7 +137,7 @@ void Server::selectPhase() {
  * @param client_fd client socket fd to echo.
  */
 void Server::echoClient(int client_fd) {
-    ssize_t ret_value = recv(client_fd, this->read_buffer, (size_t) WARMPUP_PACKET_SIZE, 0);
+    ssize_t ret_value = recv(client_fd, this->read_buffer, (size_t) MAX_PACKET_SIZE_BYTES, 0);
     if (ret_value < 0) { print_error("recv() failed", errno); }
 
     /* return value == 0:

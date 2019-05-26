@@ -28,9 +28,13 @@ warm up needed?
 
 
 P2:
-
+tcp use for infiniband
+infiniband
 
 P3:
-
+infiniband
 
 P4:
+tcp & infiniband
+
+write to csv both.
