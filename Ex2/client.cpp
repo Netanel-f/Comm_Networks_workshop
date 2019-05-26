@@ -177,7 +177,8 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
         int done_cycle = 0;
 
         for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
-            this->server_sockets[stream_idx].cycle_done = false;
+            this->server_sockets[stream_idx].send = true;
+            this->server_sockets[stream_idx].receive = false;
         }
 
         cycle_start_time = steady_clock::now();
