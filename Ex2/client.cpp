@@ -186,28 +186,35 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
             } else if (num_ready_incoming_fds == 0) {
                 if (DEBUG) { printf("**#incoming fds = 0"); }
                 continue;
-            }
+            } else {
+                if (DEBUG) { printf("**incoming = %d\n", num_ready_incoming_fds); }
+                for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
+                    int current_socket = this->server_sockets[stream_idx].socked_fd;
+                    if (FD_ISSET(current_socket, &w_streams)) {
+                        if (DEBUG) { printf("**socked %d in write\n", current_socket); }
+                        ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg,
+                                                 packet_size, 0);
+                        if (ret_value != packet_size) { print_error("send() failed", errno); }
+                        FD_CLR(current_socket, &w_streams);
+                        FD_SET(current_socket, &r_streams);
+                        this->server_sockets[stream_idx].packet_sent++;
 
-            for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
-                int current_socket = this->server_sockets[stream_idx].socked_fd;
-                if (FD_ISSET(current_socket, &w_streams)) {
-                    ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg, packet_size, 0);
-                    if (ret_value != packet_size) { print_error("send() failed", errno); }
-                    FD_CLR(current_socket, &w_streams);
-                    FD_SET(current_socket, &r_streams);
-                    this->server_sockets[stream_idx].packet_sent++;
-
-                } else if (FD_ISSET(this->server_sockets[stream_idx].socked_fd, &r_streams)) {
-                    ssize_t ret_value = recv(this->server_sockets[stream_idx].socked_fd, this->server_sockets[stream_idx].read_buffer, packet_size, 0);
-                    if (ret_value < 0) { print_error("recv() failed", errno); }
-                    FD_CLR(current_socket, &r_streams);
-                    this->server_sockets[stream_idx].packet_received++;
-                    if (this->server_sockets[stream_idx].packet_received != RTT_PACKETS_PER_CYCLE) {
-                        FD_SET(current_socket, &w_streams);
-                    } else {
-                        this->server_sockets[stream_idx].packet_sent= 0;
-                        this->server_sockets[stream_idx].packet_received = 0;
-                        done_cycle++;
+                    } else if (FD_ISSET(current_socket, &r_streams)) {
+                        if (DEBUG) { printf("**socked %d in read\n", current_socket); }
+                        ssize_t ret_value = recv(this->server_sockets[stream_idx].socked_fd,
+                                                 this->server_sockets[stream_idx].read_buffer,
+                                                 packet_size, 0);
+                        if (ret_value < 0) { print_error("recv() failed", errno); }
+                        FD_CLR(current_socket, &r_streams);
+                        this->server_sockets[stream_idx].packet_received++;
+                        if (this->server_sockets[stream_idx].packet_received !=
+                            RTT_PACKETS_PER_CYCLE) {
+                            FD_SET(current_socket, &w_streams);
+                        } else {
+                            this->server_sockets[stream_idx].packet_sent = 0;
+                            this->server_sockets[stream_idx].packet_received = 0;
+                            done_cycle++;
+                        }
                     }
                 }
             }
