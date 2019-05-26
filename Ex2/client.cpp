@@ -17,6 +17,7 @@ struct TCPSocket {
     double latency_result = 0.0;
     int packet_sent = 0;
     int packet_received = 0;
+    bool cycle_done = false;
 };
 
 
@@ -174,6 +175,10 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
         int num_ready_incoming_fds;
         int done_cycle = 0;
 
+        for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
+            this->server_sockets[stream_idx].cycle_done = false;
+        }
+
         cycle_start_time = steady_clock::now();
 
         while (done_cycle < num_of_streams) {
@@ -190,7 +195,7 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
                 if (DEBUG) { printf("**incoming = %d\n", num_ready_incoming_fds); }
                 for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
                     int current_socket = this->server_sockets[stream_idx].socked_fd;
-                    if (FD_ISSET(current_socket, &w_streams)) {
+                    if (FD_ISSET(current_socket, &w_streams) && !this->server_sockets[stream_idx].cycle_done) {
                         if (DEBUG) { printf("**socked %d in write\n", current_socket); }
                         ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg,
                                                  packet_size, 0);
@@ -208,6 +213,7 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
                         if (this->server_sockets[stream_idx].packet_received == RTT_PACKETS_PER_CYCLE) {
                             this->server_sockets[stream_idx].packet_sent = 0;
                             this->server_sockets[stream_idx].packet_received = 0;
+                            this->server_sockets[stream_idx].cycle_done = true;
                             done_cycle++;
                         }
                     }
