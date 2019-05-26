@@ -382,18 +382,18 @@ int main(int argc, char const *argv[]) {    //todo edit
 //        exit(EXIT_FAILURE);
 //    }
 
-    part3(argv[1], false, false);
+//    part3(argv[1], false, false);
 //todo delete DEBUG ONLY
-//    if (strcmp(argv[2], "1") == 0) {
-//        part3(argv[1], false, false);
-//    } else if (strcmp(argv[2], "2") == 0) {
-//        part3(argv[1], false, true);
-//    } else if (strcmp(argv[2], "3") == 0) {
-//        part3(argv[1], true, false);
-//    } else if (strcmp(argv[2], "4") == 0) {
-//        part3(argv[1], true, true);
-//
-//    }
+    if (strcmp(argv[2], "1") == 0) {
+        part3(argv[1], false, false);
+    } else if (strcmp(argv[2], "2") == 0) {
+        part3(argv[1], false, true);
+    } else if (strcmp(argv[2], "3") == 0) {
+        part3(argv[1], true, false);
+    } else if (strcmp(argv[2], "4") == 0) {
+        part3(argv[1], true, true);
+
+    }
 
     return EXIT_SUCCESS;
 }
