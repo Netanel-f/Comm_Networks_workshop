@@ -15,6 +15,8 @@ struct TCPSocket {
     int socked_fd = -1;
     char * read_buffer;
     double latency_result = 0.0;
+    int packet_sent = 0;
+    int packet_received = 0;
 };
 
 
@@ -25,6 +27,7 @@ class Client {
     TCPSocket server_sockets[MAX_PARALLEL_STREAMS];
     unsigned int num_of_streams = 1;
     unsigned int num_of_threads = 1;
+    int max_fd = 0;
 
 public:
     //// C-tor
@@ -76,6 +79,11 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
         if (current_socket < 0) {
             print_error("socket() error", errno);
             socket_creation_failed = true;
+        }
+
+        /* code for SELECT */
+        if (current_socket > this->max_fd) {
+            this->max_fd = current_socket;
         }
 
         server_sockets[stream_idx].socked_fd = current_socket;
@@ -139,6 +147,7 @@ void Client::warm_up(TCPSocket * tcpSocket) {
  * @param packet_size the size of message
  */
 void Client::measure_throughput(char * msg, ssize_t packet_size) {
+    //todo EXPERIMENTAL CODE
     /* Set chrono clocks*/
     steady_clock::time_point cycle_start_time, cycle_end_time;
     steady_clock::duration cycleTime;
@@ -153,19 +162,52 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
 
     /* Measure throughput for pre defined # of cycle */
     for (int cycle_index = 0; cycle_index < RTT_NUM_OF_CYCLES; cycle_index++) {
+
+        //todo alpha
+        fd_set r_streams;
+        fd_set w_streams;
+        FD_ZERO(&r_streams);
+        FD_ZERO(&w_streams);
+        for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
+            FD_SET(this->server_sockets[stream_idx].socked_fd, &w_streams);
+        }
+        int num_ready_incoming_fds;
+        int done_cycle = 0;
+
         cycle_start_time = steady_clock::now();
 
-        /* Sending continuously pre defined # of packets */
-        for (int packet_index = 0; packet_index < RTT_PACKETS_PER_CYCLE; packet_index++) {
+        while (done_cycle < num_of_streams) {
+            num_ready_incoming_fds = select((this->max_fd + 1), &r_streams, &w_streams, nullptr, nullptr);
+            if (num_ready_incoming_fds == -1) {
+                // select error
+                print_error("select", errno);
 
-            for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {   //todo
-                /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
-                ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg, packet_size, 0);
-                if (ret_value != packet_size) { print_error("send() failed", errno); }
+            } else if (num_ready_incoming_fds == 0) {
+                continue;
+            }
 
-                /* Receive packet and verify the #bytes sent. */
-                ret_value = recv(this->server_sockets[stream_idx].socked_fd, this->server_sockets[stream_idx].read_buffer, packet_size, 0);
-                if (ret_value < 0) { print_error("recv() failed", errno); }
+            for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
+                int current_socket = this->server_sockets[stream_idx].socked_fd;
+                if (FD_ISSET(current_socket, &w_streams)) {
+                    ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg, packet_size, 0);
+                    if (ret_value != packet_size) { print_error("send() failed", errno); }
+                    FD_CLR(current_socket, &w_streams);
+                    FD_SET(current_socket, &r_streams);
+                    this->server_sockets[stream_idx].packet_sent++;
+
+                } else if (FD_ISSET(this->server_sockets[stream_idx].socked_fd, &r_streams)) {
+                    ssize_t ret_value = recv(this->server_sockets[stream_idx].socked_fd, this->server_sockets[stream_idx].read_buffer, packet_size, 0);
+                    if (ret_value < 0) { print_error("recv() failed", errno); }
+                    FD_CLR(current_socket, &r_streams);
+                    this->server_sockets[stream_idx].packet_received++;
+                    if (this->server_sockets[stream_idx].packet_received != RTT_PACKETS_PER_CYCLE) {
+                        FD_SET(current_socket, &w_streams);
+                    } else {
+                        this->server_sockets[stream_idx].packet_sent= 0;
+                        this->server_sockets[stream_idx].packet_received = 0;
+                        done_cycle++;
+                    }
+                }
             }
         }
 
@@ -182,12 +224,60 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
 }
 
 
+///**
+// * This method will measure throughput of TCP socket using message with certain size to send.
+// * @param msg pointer to char[packet_size]
+// * @param packet_size the size of message
+// */
+//void Client::measure_throughput(char * msg, ssize_t packet_size) {
+//    /* Set chrono clocks*/
+//    steady_clock::time_point cycle_start_time, cycle_end_time;
+//    steady_clock::duration cycleTime;
+//    this->max_throughput_result = 0.0;
+//
+//    /* init calculations */
+//    auto cycle_bytes_transferred = this->num_of_streams * 2 * RTT_PACKETS_PER_CYCLE * packet_size;
+//    auto bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
+//
+//    /* Init the packet message to send*/
+//    memset(msg, 1, packet_size);
+//
+//    /* Measure throughput for pre defined # of cycle */
+//    for (int cycle_index = 0; cycle_index < RTT_NUM_OF_CYCLES; cycle_index++) {
+//        cycle_start_time = steady_clock::now();
+//
+//        /* Sending continuously pre defined # of packets */
+//        for (int packet_index = 0; packet_index < RTT_PACKETS_PER_CYCLE; packet_index++) {
+//
+//            for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {   //todo
+//                /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
+//                ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg, packet_size, 0);
+//                if (ret_value != packet_size) { print_error("send() failed", errno); }
+//
+//                /* Receive packet and verify the #bytes sent. */
+//                ret_value = recv(this->server_sockets[stream_idx].socked_fd, this->server_sockets[stream_idx].read_buffer, packet_size, 0);
+//                if (ret_value < 0) { print_error("recv() failed", errno); }
+//            }
+//        }
+//
+//        cycle_end_time  = steady_clock::now();
+//
+//        auto cycle_time_seconds = fp_seconds(cycle_end_time - cycle_start_time);
+//
+//        auto cycle_throughput = bits_transferred_per_cycle / cycle_time_seconds.count();
+//
+//        if (cycle_throughput > this->max_throughput_result) {
+//            this->max_throughput_result = cycle_throughput;
+//        }
+//    }
+//}
+
+
 /**
   * This method will calculate the packet rate, based on previously throughput measured.
   * @param packet_size packet size to calculate by.
   */
 void Client::calculate_packet_rate(ssize_t packet_size) {
-    //todo
     this->packet_rate_result =  (this->max_throughput_result) / packet_size;
 }
 
@@ -363,7 +453,7 @@ void part1(const char * serverIP) {
 }
 
 void part3(const char * serverIP, bool multiStreams, bool incMsgSize) {
-    printf("\n**testing multi-streams: %s, increamental size: %s**\n", (multiStreams ? "true" : "false"), (incMsgSize ? "true" : "false"));
+    printf("\n**testing multi-streams: %s, incremental size: %s**\n", (multiStreams ? "true" : "false"), (incMsgSize ? "true" : "false"));
     unsigned int max_streams = 1;
     if (multiStreams) { max_streams = MAX_PARALLEL_STREAMS; }
 
@@ -391,14 +481,16 @@ int main(int argc, char const *argv[]) {
 
 //    part3(argv[1], false, false);
 //todo delete DEBUG ONLY
-    if (strcmp(argv[2], "1") == 0) {
-        part3(argv[1], false, false);
-    } else if (strcmp(argv[2], "2") == 0) {
-        part3(argv[1], false, true);
-    } else if (strcmp(argv[2], "3") == 0) {
-        part3(argv[1], true, false);
-    } else if (strcmp(argv[2], "4") == 0) {
-        part3(argv[1], true, true);
+    if (argc == 3) {
+        if (strcmp(argv[2], "1") == 0) {
+            part3(argv[1], false, false);
+        } else if (strcmp(argv[2], "2") == 0) {
+            part3(argv[1], false, true);
+        } else if (strcmp(argv[2], "3") == 0) {
+            part3(argv[1], true, false);
+        } else if (strcmp(argv[2], "4") == 0) {
+            part3(argv[1], true, true);
+        }
     } else {
         part3(argv[1], false, false);
         part3(argv[1], false, true);
