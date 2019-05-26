@@ -489,7 +489,8 @@ void part3(const char * serverIP, bool multiStreams, bool incMsgSize) {
     for (unsigned int num_of_streams = 1; num_of_streams <= max_streams; num_of_streams++) {
         /* Create client object and connect to given server-ip and run tests */
         Client client = Client(serverIP, num_of_streams);
-
+        //todo implement better approch for multi stream setup
+        //need to decrease time of warmup
         client.run_tests(incMsgSize);
 
         /* Close client and disconnect from server */
