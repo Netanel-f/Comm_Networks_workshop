@@ -388,13 +388,13 @@ int main(int argc, char const *argv[]) {    //todo edit
 //    }
 
 //todo delete DEBUG ONLY
-    if (strcmp(argv[2], "1")) {
+    if (strcmp(argv[2], "1") == 0) {
         part3(argv[1], false, false);
-    } else if (strcmp(argv[2], "2")) {
+    } else if (strcmp(argv[2], "2") == 0) {
         part3(argv[1], false, true);
-    } else if (strcmp(argv[2], "3")) {
+    } else if (strcmp(argv[2], "3") == 0) {
         part3(argv[1], true, false);
-    } else if (strcmp(argv[2], "4")) {
+    } else if (strcmp(argv[2], "4") == 0) {
         part3(argv[1], true, true);
 
     }
