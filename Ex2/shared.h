@@ -34,7 +34,8 @@ using namespace std::chrono;
 
 
 #define ONE_BYTE 1
-#define ONE_MEGABYTE_IN_BYTES 1048576
+#define MEGABYTE_IN_KILOBYTES 1024
+#define MEGABYTE_IN_BYTES 1048576
 
 
 #define KILOBIT_IN_BITS 1000
@@ -44,7 +45,7 @@ using namespace std::chrono;
 //#define RESULTS_FORMAT "%ld\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
 #define RESULTS_HEADER "Msg size:\t#Sockets:\t#Threads:\tTotal latency:\tTotal throughput:\tTotal packet rate:\n"
-#define RESULTS_FORMAT "%ld\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
+#define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 
 #define DEBUG false
 

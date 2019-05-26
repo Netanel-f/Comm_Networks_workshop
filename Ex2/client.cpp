@@ -221,7 +221,20 @@ void Client::measure_latency(TCPSocket * tcpSocket, char * msg, ssize_t packet_s
  * @param packet_size the packet size results.
  */
 void Client::print_results(ssize_t packet_size) {
-    /* Print maximal throughput measured */
+    /* Adjusting packet size units */
+    std::string packet_unit;
+    if (packet_size > MEGABYTE_IN_BYTES) {
+        packet_size /= MEGABYTE_IN_BYTES;
+        packet_unit = "MB";
+    } else if (packet_size > MEGABYTE_IN_KILOBYTES) {
+        packet_size /= MEGABYTE_IN_KILOBYTES;
+        packet_unit = "KB";
+    } else {
+        packet_unit = "Bytes";
+    }
+
+
+    /* Adjusting maximal throughput measured result*/
     std::string rate_unit;
     if (max_throughput_result > GIGABIT_IN_BITS) {
         max_throughput_result = max_throughput_result / GIGABIT_IN_BITS;
@@ -244,7 +257,7 @@ void Client::print_results(ssize_t packet_size) {
     this->latency_result /= this->num_of_streams;
 
     // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
-    printf(RESULTS_FORMAT, packet_size, this->num_of_streams, 1, latency_result, "milliseconds", max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second");
+    printf(RESULTS_FORMAT, packet_size, packet_unit.c_str(),  this->num_of_streams, 1, latency_result, "milliseconds", max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second");
 }
 
 /**
@@ -284,7 +297,7 @@ void Client::run_tests(bool incremental_msg_size) {
     ssize_t max_packet_size = ONE_BYTE;
 
     if (incremental_msg_size) {
-        max_packet_size = ONE_MEGABYTE_IN_BYTES;
+        max_packet_size = MEGABYTE_IN_BYTES;
     }
 
     /* Measure throughput and latency , for exponential series of message sizes */
