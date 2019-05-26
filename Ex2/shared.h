@@ -41,6 +41,6 @@
 // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
 #define RESULTS_FORMAT "%ld\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 
-#define DEBUG true
+#define DEBUG false
 
 #endif //COMM_NETS_SHARED_H
