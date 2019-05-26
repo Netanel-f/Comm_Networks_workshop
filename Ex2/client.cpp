@@ -5,7 +5,7 @@
 using fp_milliseconds = std::chrono::duration<double, std::chrono::milliseconds::period>;
 using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
 
-#define SAVE_RESULTS_TO_CSV false
+#define SAVE_RESULTS_TO_CSV false //todo set true when submit
 
 
 /**
@@ -14,7 +14,6 @@ using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
 struct TCPSocket {
     int socked_fd = -1;
     char * read_buffer;
-//    char read_buffer[MAX_PACKET_SIZE_BYTES + 1] = "0";
     double latency_result = 0.0;
 };
 
@@ -236,9 +235,11 @@ void Client::print_results(ssize_t packet_size) {
     if (packet_size >= MEGABYTE_IN_BYTES) {
         packet_size /= MEGABYTE_IN_BYTES;
         packet_unit = "MB";
+
     } else if (packet_size >= MEGABYTE_IN_KILOBYTES) {
         packet_size /= MEGABYTE_IN_KILOBYTES;
         packet_unit = "KB";
+
     } else {
         packet_unit = "Bytes";
     }
@@ -247,14 +248,17 @@ void Client::print_results(ssize_t packet_size) {
     /* Adjusting maximal throughput measured result*/
     std::string rate_unit;
     if (max_throughput_result >= GIGABIT_IN_BITS) {
-        max_throughput_result = max_throughput_result / GIGABIT_IN_BITS;
+        max_throughput_result /= GIGABIT_IN_BITS;
         rate_unit = "Gbps";
+
     } else if (max_throughput_result >= MEGABIT_IN_BITS) {
+        max_throughput_result /= MEGABIT_IN_BITS;
         rate_unit = "Mbps";
-        max_throughput_result = max_throughput_result / MEGABIT_IN_BITS;
+
     } else if (max_throughput_result >= KILOBIT_IN_BITS) {
-        max_throughput_result = max_throughput_result / KILOBIT_IN_BITS;
+        max_throughput_result /= KILOBIT_IN_BITS;
         rate_unit = "Kbps";
+
     } else {
         rate_unit = "bps";
     }
@@ -275,21 +279,19 @@ void Client::print_results(ssize_t packet_size) {
         this->results_file << this->packet_rate_result << " " << "packets/second" << ",";
         this->results_file << std::endl;
     } else {
-        // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
         printf(RESULTS_FORMAT, packet_size, packet_unit.c_str(), this->num_of_streams,
                 this->num_of_threads, this->latency_result, "milliseconds",
                 max_throughput_result, rate_unit.c_str(), packet_rate_result, "packets/second");
     }
 }
 
+
 /**
  * close the open socket towards server.
  */
 void Client::kill_client() {
-//    close(server_fd);
     this->results_file.flush();
     this->results_file.close();
-
 
     for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
         delete(this->server_sockets[stream_idx].read_buffer);
@@ -297,6 +299,7 @@ void Client::kill_client() {
         close(this->server_sockets[stream_idx].socked_fd);
     }
 }
+
 
 /**
  * This method will print the function that raised the given error number.
@@ -307,6 +310,7 @@ void Client::print_error(const std::string& function_name, int error_number) {
     printf("ERROR: %s %d.\n", function_name.c_str(), error_number);
     exit(EXIT_FAILURE);
 }
+
 
 /**
  * This method will warm up the system and will run measurement tests.
@@ -373,10 +377,11 @@ void part3(const char * serverIP, bool multiStreams, bool incMsgSize) {
 }
 
 
-int main(int argc, char const *argv[]) {    //todo edit
+int main(int argc, char const *argv[]) {
     /* Create client object and connect to given server-ip and run tests */
 //    Client client = Client(argv[1]);
 
+//todo set on when submit
 //    if(argc != 2) {
 //        printf("Usage: client <IPv4 address>\n");
 //        exit(EXIT_FAILURE);

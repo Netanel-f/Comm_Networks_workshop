@@ -5,10 +5,7 @@
 class Server {
     int welcome_socket;
     char * read_buffer;
-//    char read_buffer[MAX_PACKET_SIZE_BYTES + 1] = "0";
     bool keep_loop_select = true;
-//    bool server_can_shutdown = false;
-//    steady_clock::time_point last_socket_activity_timestamp;
 
     // clients sockets
     std::map<std::string, int> clients_sockets;
@@ -42,9 +39,10 @@ Server::Server() {
     if (welcome_socket < 0) { print_error("socket() error", errno); }
 
     int enable = 1;
-    //todo del before submit
-    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0){
-//    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0){
+//    //todo SO_REUSEADDR for windows
+//    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0){
+    //todo SO_REUSEPORT for linux
+    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0){
         print_error("setsockopt", errno);
     }
 
@@ -73,7 +71,7 @@ int Server::getMaxFd() {
 
 
 void Server::selectPhase() {
-    if (DEBUG) { printf("DEBUG: %s welcomesocket=%d\n", "select phase", welcome_socket); }
+    if (DEBUG) { printf("DEBUG: %s welcome socket=%d\n", "select phase", welcome_socket); }
     /* initializing arguments for select() */
     FD_ZERO(&clients_fds);
     FD_SET(welcome_socket, &clients_fds);
@@ -81,14 +79,6 @@ void Server::selectPhase() {
     int num_ready_incoming_fds = 0;
 
     while (keep_loop_select) {
-        //todo debug
-//        auto seconds_idle = duration_cast<seconds>(steady_clock::now() - this->last_socket_activity_timestamp).count();
-//        if (this->server_can_shutdown && seconds_idle > 10) {
-//            if (DEBUG) { printf("seconds %ld\n", seconds_idle); }
-//            keep_loop_select = false;
-//            break;
-//        }
-
         int max_fd = getMaxFd();
         read_fds = clients_fds;
         struct timeval tv_timeout = {10, 0}; // 10 seconds time out
@@ -124,15 +114,12 @@ void Server::selectPhase() {
             } else {
                 FD_SET(new_client_socket, &clients_fds);
                 clients_sockets.emplace(std::to_string(new_client_socket), new_client_socket);
-//                this->server_can_shutdown = false;
-//                this->last_socket_activity_timestamp = steady_clock::now();
             }
         }
 
         /* checking other sockets */
         if (!this->clients_sockets.empty()) {
             auto temp_client_sockets = this->clients_sockets;
-//            for (auto client: this->clients_sockets) {
             for (auto client: temp_client_sockets) {
                 if (FD_ISSET(client.second, &read_fds)) {
 
