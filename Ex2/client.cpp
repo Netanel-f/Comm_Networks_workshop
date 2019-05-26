@@ -382,15 +382,22 @@ int main(int argc, char const *argv[]) {    //todo edit
     /* Create client object and connect to given server-ip and run tests */
 //    Client client = Client(argv[1]);
 
-    if(argc != 2) {
-        printf("Usage: client <IPv4 address>\n");
-        exit(EXIT_FAILURE);
-    }
+//    if(argc != 2) {
+//        printf("Usage: client <IPv4 address>\n");
+//        exit(EXIT_FAILURE);
+//    }
 
-//    part3(argv[1], false, false);
-//    part3(argv[1], false, true);
-    part3(argv[1], true, false);
-//    part3(argv[1], true, true);
+//todo delete DEBUG ONLY
+    if (strcmp(argv[2], "1")) {
+        part3(argv[1], false, false);
+    } else if (strcmp(argv[2], "2")) {
+        part3(argv[1], false, true);
+    } else if (strcmp(argv[2], "3")) {
+        part3(argv[1], true, false);
+    } else if (strcmp(argv[2], "4")) {
+        part3(argv[1], true, true);
+
+    }
 
     return EXIT_SUCCESS;
 }
