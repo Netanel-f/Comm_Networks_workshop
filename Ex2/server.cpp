@@ -39,7 +39,7 @@ Server::Server() {
     if (welcome_socket < 0) { print_error("socket() error", errno); }
 
     int enable = 1;
-//    //todo SO_REUSEADDR for windows
+    //todo SO_REUSEADDR for windows
 //    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0){
     //todo SO_REUSEPORT for linux
     if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0){
@@ -156,13 +156,10 @@ void Server::echoClient(int client_fd) {
         if (ret_value < 0) { print_error("close() failed.", errno); }
 
         this->clients_sockets.erase(std::to_string(client_fd));
-//        this->last_socket_activity_timestamp = steady_clock::now();
         if (DEBUG) { printf("**erasing %d\n", client_fd); }
         if (this->clients_sockets.empty()) {
             if (DEBUG) { printf("**client_sockets empty\n"); }
-//            this->server_can_shutdown = true;
-//            this->keep_loop_select = false;
-//            killServer();
+
         }
 
     } else {

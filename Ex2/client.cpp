@@ -63,7 +63,7 @@ Client::Client(const char * serverIP, unsigned int num_of_streams) {
 
     if (SAVE_RESULTS_TO_CSV) {
         /* open csv file */
-        this->results_file.open("tcp.csv", std::ofstream::app);
+        this->results_file.open("tcp1.csv", std::ofstream::app);
         //todo fix this line
         this->results_file << "Message size,#sockets,#threads,Total latency,Total throughput,Total packet rate,\n";
     }
@@ -290,8 +290,10 @@ void Client::print_results(ssize_t packet_size) {
  * close the open socket towards server.
  */
 void Client::kill_client() {
-    this->results_file.flush();
-    this->results_file.close();
+    if (SAVE_RESULTS_TO_CSV) {
+        this->results_file.flush();
+        this->results_file.close();
+    }
 
     for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
         delete(this->server_sockets[stream_idx].read_buffer);
@@ -397,7 +399,11 @@ int main(int argc, char const *argv[]) {
         part3(argv[1], true, false);
     } else if (strcmp(argv[2], "4") == 0) {
         part3(argv[1], true, true);
-
+    } else {
+        part3(argv[1], false, false);
+        part3(argv[1], false, true);
+        part3(argv[1], true, false);
+        part3(argv[1], true, true);
     }
 
     return EXIT_SUCCESS;
