@@ -168,9 +168,9 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
         fd_set w_streams;
         FD_ZERO(&r_streams);
         FD_ZERO(&w_streams);
-        for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
-            FD_SET(this->server_sockets[stream_idx].socked_fd, &w_streams);
-        }
+        FD_SET(this->max_fd, &r_streams);
+        FD_SET(this->max_fd, &w_streams);
+
         int num_ready_incoming_fds;
         int done_cycle = 0;
 
@@ -195,8 +195,6 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
                         ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg,
                                                  packet_size, 0);
                         if (ret_value != packet_size) { print_error("send() failed", errno); }
-                        FD_CLR(current_socket, &w_streams);
-                        FD_SET(current_socket, &r_streams);
                         this->server_sockets[stream_idx].packet_sent++;
 
                     } else if (FD_ISSET(current_socket, &r_streams)) {
@@ -205,12 +203,9 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
                                                  this->server_sockets[stream_idx].read_buffer,
                                                  packet_size, 0);
                         if (ret_value < 0) { print_error("recv() failed", errno); }
-                        FD_CLR(current_socket, &r_streams);
                         this->server_sockets[stream_idx].packet_received++;
-                        if (this->server_sockets[stream_idx].packet_received !=
-                            RTT_PACKETS_PER_CYCLE) {
-                            FD_SET(current_socket, &w_streams);
-                        } else {
+
+                        if (this->server_sockets[stream_idx].packet_received == RTT_PACKETS_PER_CYCLE) {
                             this->server_sockets[stream_idx].packet_sent = 0;
                             this->server_sockets[stream_idx].packet_received = 0;
                             done_cycle++;
