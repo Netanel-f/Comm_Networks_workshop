@@ -40,9 +40,9 @@ Server::Server() {
 
     int enable = 1;
     //todo SO_REUSEADDR for windows
-    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0){
+//    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0){
     //todo SO_REUSEPORT for linux
-//    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0){
+    if (setsockopt(welcome_socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0){
         print_error("setsockopt", errno);
     }
 

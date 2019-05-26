@@ -20,7 +20,7 @@
 using namespace std::chrono;
 
 #define MAX_INCOMING_QUEUE 10
-#define PORT_NUMBER 54329
+#define PORT_NUMBER 54321
 #define WARMUP_PACKET_SIZE 1024
 #define MAX_PACKET_SIZE_BYTES 1048576
 
