@@ -175,6 +175,9 @@ void Server::echoClient(int client_fd) {
  * close the open sockets.
  */
 void Server::killServer() {
+    /* deleted buffer */
+    delete(this->read_buffer);
+
     /* close welcome socket */
     FD_CLR(this->welcome_socket, &this->clients_fds);
     shutdown(this->welcome_socket, SHUT_RDWR);

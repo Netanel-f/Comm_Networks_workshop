@@ -254,6 +254,7 @@ void Client::kill_client() {
 //    close(server_fd);
 
     for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
+        delete(this->server_sockets[stream_idx].read_buffer);
         shutdown(this->server_sockets[stream_idx].socked_fd, SHUT_RDWR);
         close(this->server_sockets[stream_idx].socked_fd);
     }
@@ -319,7 +320,7 @@ void part1(const char * serverIP) {
 }
 
 void part3(const char * serverIP, bool multiStreams, bool incMsgSize) {
-
+    printf("testing multi-streams: %s, increamental size: %s", (multiStreams ? "true" : "false"), (incMsgSize ? "true" : "false"));
     unsigned int max_streams = 1;
     if (multiStreams) { max_streams = MAX_PARALLEL_STREAMS; }
 
@@ -344,6 +345,9 @@ int main(int argc, char const *argv[]) {    //todo edit
         exit(EXIT_FAILURE);
     }
 
+    part3(argv[1], false, false);
+    part3(argv[1], false, true);
+    part3(argv[1], true, false);
     part3(argv[1], true, true);
 
     return EXIT_SUCCESS;
