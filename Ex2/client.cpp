@@ -162,7 +162,7 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
 
     /* Measure throughput for pre defined # of cycle */
     for (int cycle_index = 0; cycle_index < RTT_NUM_OF_CYCLES; cycle_index++) {
-
+        if (DEBUG) { printf("**cycle_index: %d\n", cycle_index); }
         //todo alpha
         fd_set r_streams;
         fd_set w_streams;
@@ -177,12 +177,14 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
         cycle_start_time = steady_clock::now();
 
         while (done_cycle < num_of_streams) {
+            if (DEBUG) { printf("**done cycle = %d\n", done_cycle); }
             num_ready_incoming_fds = select((this->max_fd + 1), &r_streams, &w_streams, nullptr, nullptr);
             if (num_ready_incoming_fds == -1) {
                 // select error
                 print_error("select", errno);
 
             } else if (num_ready_incoming_fds == 0) {
+                if (DEBUG) { printf("**#incoming fds = 0"); }
                 continue;
             }
 
