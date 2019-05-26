@@ -343,7 +343,7 @@ int main(int argc, char const *argv[]) {    //todo edit
         exit(EXIT_FAILURE);
     }
 
-    part3(serverIP = argv[1], multiSteams=true, incMsgSize=true);
+    part3(argv[1], true, true);
 
     return EXIT_SUCCESS;
 }
