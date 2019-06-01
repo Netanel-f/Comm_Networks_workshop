@@ -49,9 +49,6 @@ using namespace std::chrono;
 #define RESULTS_HEADER "Msg size:\t#Sockets:\t#Threads:\tTotal latency:\tTotal throughput:\tTotal packet rate:\n"
 #define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 
-#define IB_PACKET_PER_CYCLE 100
-#define IB_NUM_OF_CYCLE 1000
-
 
 #define DEBUG true
 
