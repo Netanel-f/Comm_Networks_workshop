@@ -46,7 +46,7 @@ using namespace std::chrono;
 //#define RESULTS_FORMAT "%ld\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
 #define RESULTS_HEADER "Msg size:\t#Sockets:\t#Threads:\tTotal latency:\tTotal throughput:\tTotal packet rate:\n"
-#define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%ld\t%s\n"
+#define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%Lf\t%s\n"
 #define SAVE_RESULTS_TO_CSV true //todo set true when submit
 
 #define DEBUG true
