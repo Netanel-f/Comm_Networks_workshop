@@ -720,6 +720,8 @@ int main(int argc, char *argv[])
     for (int i=0; i<argc; i++) {
         printf("\n**%s***\n", argv[i]);
     }
+    servername = "";
+    printf("\n**optind:%d***\n", optind);
     if (optind == argc - 1)
         servername = strdup(argv[optind]);
     else if (optind < argc) {
