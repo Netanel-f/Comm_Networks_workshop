@@ -714,10 +714,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (optind == argc - 1)
+    if (optind == argc - 1) {
         servername = strdup(argv[optind]);
         printf("**%s***", servername);
-    else if (optind < argc) {
+    } else if (optind < argc) {
         usage(argv[0]);
         return 1;
     }
