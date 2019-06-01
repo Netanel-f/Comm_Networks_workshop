@@ -34,6 +34,7 @@
 
 #define IB_PACKET_PER_CYCLE 100
 #define IB_NUM_OF_CYCLE 1000
+#define IB_MAX_QPS 10
 #define WC_BATCH (10)
 
 enum {
@@ -56,6 +57,13 @@ struct pingpong_context {
     int				rx_depth;
     int				routs;
     struct ibv_port_attr	portinfo;
+    int created_qps;
+    int active_qps;
+    struct ibv_cq cq_array[IB_MAX_QPS];
+    struct ibv_qp qp_array[IB_MAX_QPS];
+    struct ibv_port_attr	portinfo_array[IB_MAX_QPS];
+    int routs_array[IB_MAX_QPS];
+    int rx_depths_array[IB_MAX_QPS];
 };
 
 struct pingpong_dest {
@@ -345,7 +353,7 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
 
 static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
                                             int rx_depth, int tx_depth, int port,
-                                            int use_event, int is_server)
+                                            int use_event, int is_server, bool multistream)
 {
     struct pingpong_context *ctx;
 
@@ -353,9 +361,20 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
     if (!ctx)
         return NULL;
 
+    if (multistream) {
+        ctx->created_qps = IB_MAX_QPS;
+    } else {
+        ctx->created_qps = 1;
+    }
+    ctx->active_qps = 1;
     ctx->size     = size;
-    ctx->rx_depth = rx_depth;
-    ctx->routs    = rx_depth;
+
+    for (int idx =0; idx < ctx->created_qps; idx++) {
+        ctx->rx_depths_array[idx] = rx_depth;
+        ctx->routs_array[idx] = rx_depth;
+    }
+//    ctx->rx_depth = rx_depth;
+//    ctx->routs    = rx_depth;
 
     ctx->buf = malloc(roundup(size, page_size));
     if (!ctx->buf) {
@@ -393,66 +412,128 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
         return NULL;
     }
 
-    ctx->cq = ibv_create_cq(ctx->context, rx_depth + tx_depth, NULL,
-                            ctx->channel, 0);
-    if (!ctx->cq) {
-        fprintf(stderr, "Couldn't create CQ\n");
-        return NULL;
-    }
-
-    {
-        struct ibv_qp_init_attr attr = {
-                .send_cq = ctx->cq,
-                .recv_cq = ctx->cq,
-                .cap     = {
-                        .max_send_wr  = tx_depth,
-                        .max_recv_wr  = rx_depth,
-                        .max_send_sge = 1,
-                        .max_recv_sge = 1
-                },
-                .qp_type = IBV_QPT_RC
-        };
-
-        ctx->qp = ibv_create_qp(ctx->pd, &attr);
-        if (!ctx->qp)  {
-            fprintf(stderr, "Couldn't create QP\n");
+    for (int i=0; i < ctx->created_qps; i++) {
+        ctx->cq_array[i] = ibv_create_cq(ctx->context, rx_depth + tx_depth, NULL, ctx->channel, 0);
+        if (!(ctx->cq_array[i])) {
+            fprintf(stderr, "Couldn't create CQ\n");
             return NULL;
         }
-    }
 
-    {
-        struct ibv_qp_attr attr = {
-                .qp_state        = IBV_QPS_INIT,
-                .pkey_index      = 0,
-                .port_num        = port,
-                .qp_access_flags = IBV_ACCESS_REMOTE_READ |
-                                   IBV_ACCESS_REMOTE_WRITE
-        };
+        {
+            struct ibv_qp_init_attr attr = {
+                    .send_cq = ctx->cq_array[i],
+                    .recv_cq = ctx->cq_array[i],
+                    .cap     = {
+                            .max_send_wr  = tx_depth,
+                            .max_recv_wr  = rx_depth,
+                            .max_send_sge = 1,
+                            .max_recv_sge = 1
+                    },
+                    .qp_type = IBV_QPT_RC
+            };
 
-        if (ibv_modify_qp(ctx->qp, &attr,
-                          IBV_QP_STATE              |
-                          IBV_QP_PKEY_INDEX         |
-                          IBV_QP_PORT               |
-                          IBV_QP_ACCESS_FLAGS)) {
-            fprintf(stderr, "Failed to modify QP to INIT\n");
-            return NULL;
+            ctx->qp_array[i] = ibv_create_qp(ctx->pd, &attr);
+
+            if (!ctx->qp_array[i])  {
+                fprintf(stderr, "Couldn't create QP\n");
+                return NULL;
+            }
         }
+
+        {
+            struct ibv_qp_attr attr = {
+                    .qp_state        = IBV_QPS_INIT,
+                    .pkey_index      = 0,
+                    .port_num        = port,
+                    .qp_access_flags = IBV_ACCESS_REMOTE_READ |
+                                       IBV_ACCESS_REMOTE_WRITE
+            };
+
+            if (ibv_modify_qp(ctx->qp_array[i], &attr,
+                              IBV_QP_STATE              |
+                              IBV_QP_PKEY_INDEX         |
+                              IBV_QP_PORT               |
+                              IBV_QP_ACCESS_FLAGS)) {
+                fprintf(stderr, "Failed to modify QP to INIT\n");
+                return NULL;
+            }
+        }
+
     }
+
+
+//    ctx->cq = ibv_create_cq(ctx->context, rx_depth + tx_depth, NULL,
+//                            ctx->channel, 0);
+//    if (!ctx->cq) {
+//        fprintf(stderr, "Couldn't create CQ\n");
+//        return NULL;
+//    }
+//
+//    {
+//        struct ibv_qp_init_attr attr = {
+//                .send_cq = ctx->cq,
+//                .recv_cq = ctx->cq,
+//                .cap     = {
+//                        .max_send_wr  = tx_depth,
+//                        .max_recv_wr  = rx_depth,
+//                        .max_send_sge = 1,
+//                        .max_recv_sge = 1
+//                },
+//                .qp_type = IBV_QPT_RC
+//        };
+//
+//        ctx->qp = ibv_create_qp(ctx->pd, &attr);
+//        if (!ctx->qp)  {
+//            fprintf(stderr, "Couldn't create QP\n");
+//            return NULL;
+//        }
+//    }
+//
+//    {
+//        struct ibv_qp_attr attr = {
+//                .qp_state        = IBV_QPS_INIT,
+//                .pkey_index      = 0,
+//                .port_num        = port,
+//                .qp_access_flags = IBV_ACCESS_REMOTE_READ |
+//                                   IBV_ACCESS_REMOTE_WRITE
+//        };
+//
+//        if (ibv_modify_qp(ctx->qp, &attr,
+//                          IBV_QP_STATE              |
+//                          IBV_QP_PKEY_INDEX         |
+//                          IBV_QP_PORT               |
+//                          IBV_QP_ACCESS_FLAGS)) {
+//            fprintf(stderr, "Failed to modify QP to INIT\n");
+//            return NULL;
+//        }
+//    }
 
     return ctx;
 }
 
 int pp_close_ctx(struct pingpong_context *ctx)
 {
-    if (ibv_destroy_qp(ctx->qp)) {
-        fprintf(stderr, "Couldn't destroy QP\n");
-        return 1;
-    }
+    for (int idx = 0; idx < ctx->created_qps; idx++) {
+        if (ibv_destroy_qp(ctx->qp_array[idx])) {
+            fprintf(stderr, "Couldn't destroy QP\n");
+            return 1;
+        }
 
-    if (ibv_destroy_cq(ctx->cq)) {
-        fprintf(stderr, "Couldn't destroy CQ\n");
-        return 1;
+        if (ibv_destroy_cq(ctx->cq_array[idx])) {
+            fprintf(stderr, "Couldn't destroy CQ\n");
+            return 1;
+        }
+
     }
+//    if (ibv_destroy_qp(ctx->qp)) {
+//        fprintf(stderr, "Couldn't destroy QP\n");
+//        return 1;
+//    }
+//
+//    if (ibv_destroy_cq(ctx->cq)) {
+//        fprintf(stderr, "Couldn't destroy CQ\n");
+//        return 1;
+//    }
 
     if (ibv_dereg_mr(ctx->mr)) {
         fprintf(stderr, "Couldn't deregister MR\n");
@@ -482,7 +563,7 @@ int pp_close_ctx(struct pingpong_context *ctx)
     return 0;
 }
 
-static int pp_post_recv(struct pingpong_context *ctx, int n)
+static int pp_post_recv(struct pingpong_context *ctx, int qp_idx, int n)
 {
     struct ibv_sge list = {
             .addr	= (uintptr_t) ctx->buf,
@@ -498,14 +579,15 @@ static int pp_post_recv(struct pingpong_context *ctx, int n)
     struct ibv_recv_wr *bad_wr;
     int i;
 
+
     for (i = 0; i < n; ++i)
-        if (ibv_post_recv(ctx->qp, &wr, &bad_wr))
+        if (ibv_post_recv(ctx->qp_array[qp_idx], &wr, &bad_wr))
             break;
 
     return i;
 }
 
-static int pp_post_send(struct pingpong_context *ctx)
+static int pp_post_send(struct pingpong_context *ctx, int qp_idx)
 {
     struct ibv_sge list = {
             .addr	= (uint64_t)ctx->buf,
@@ -522,7 +604,8 @@ static int pp_post_send(struct pingpong_context *ctx)
             .next       = NULL
     };
 
-    return ibv_post_send(ctx->qp, &wr, &bad_wr);
+//    return ibv_post_send(ctx->qp, &wr, &bad_wr);
+    return ibv_post_send(ctx->qp_array[qp_idx], &wr, &bad_wr);
 }
 
 int pp_wait_completions(struct pingpong_context *ctx, int iters)
@@ -617,6 +700,10 @@ int main(int argc, char *argv[])
     bool inc_msgs_size = false;
     bool multi_streams = false;
     bool multi_threads = false;
+    struct pingpong_dest     my_dest_array[IB_MAX_QPS];
+    struct pingpong_dest    *rem_dest_array[IB_MAX_QPS];
+
+
     FILE * csv_fp;
     srand48(getpid() * time(NULL));
 
@@ -711,15 +798,25 @@ int main(int argc, char *argv[])
         }
     }
 
-    ctx = pp_init_ctx(ib_dev, size, rx_depth, tx_depth, ib_port, use_event, !servername);
+    ctx = pp_init_ctx(ib_dev, size, rx_depth, tx_depth, ib_port, use_event, !servername, multi_streams);
     if (!ctx)
         return 1;
 
-    ctx->routs = pp_post_recv(ctx, ctx->rx_depth);
-    if (ctx->routs < ctx->rx_depth) {
-        fprintf(stderr, "Couldn't post receive (%d)\n", ctx->routs);
-        return 1;
+    for (int idx = 0; idx < ctx->created_qps; idx++) {
+        ctx->routs_array[idx] = pp_post_recv(ctx, idx, ctx->rx_depths_array[idx]);
+        if (ctx->routs_array[idx] < ctx->rx_depths_array[idx]) {
+            fprintf(stderr, "Couldn't post receive (%d)\n", ctx->routs);
+            return 1;
+        }
+
+
+
     }
+//    ctx->routs = pp_post_recv(ctx, ctx->rx_depth);
+//    if (ctx->routs < ctx->rx_depth) {
+//        fprintf(stderr, "Couldn't post receive (%d)\n", ctx->routs);
+//        return 1;
+//    }
 
     if (use_event)
         if (ibv_req_notify_cq(ctx->cq, 0)) {
@@ -733,25 +830,46 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    my_dest.lid = ctx->portinfo.lid;
-    if (ctx->portinfo.link_layer == IBV_LINK_LAYER_INFINIBAND && !my_dest.lid) {
-        fprintf(stderr, "Couldn't get local LID\n");
-        return 1;
-    }
+    for (int idx = 0; idx < ctx->created_qps; idx++) {
+        my_dest_array[idx].lid = ctx->portinfo.lid;
 
-    if (gidx >= 0) {
-        if (ibv_query_gid(ctx->context, ib_port, gidx, &my_dest.gid)) {
-            fprintf(stderr, "Could not get local gid for gid index %d\n", gidx);
+        if (ctx->portinfo.link_layer == IBV_LINK_LAYER_INFINIBAND && !my_dest_array[idx].lid) {
+            fprintf(stderr, "Couldn't get local LID\n");
             return 1;
         }
-    } else
-        memset(&my_dest.gid, 0, sizeof my_dest.gid);
 
-    my_dest.qpn = ctx->qp->qp_num;
-    my_dest.psn = lrand48() & 0xffffff;
-    inet_ntop(AF_INET6, &my_dest.gid, gid, sizeof gid);
-    printf("  local address:  LID 0x%04x, QPN 0x%06x, PSN 0x%06x, GID %s\n",
-           my_dest.lid, my_dest.qpn, my_dest.psn, gid);
+        if (gidx >= 0) {
+            if (ibv_query_gid(ctx->context, ib_port, gidx, &my_dest_array[idx].gid)) {
+                fprintf(stderr, "Could not get local gid for gid index %d\n", gidx);
+                return 1;
+            }
+        } else
+            memset(&my_dest_array[idx].gid, 0, sizeof my_dest_array[idx].gid);
+
+        my_dest_array[idx].qpn = ctx->qp_array[idx]->qp_num;
+        my_dest_array[idx].psn = lrand48() & 0xffffff;
+        inet_ntop(AF_INET6, &my_dest_array[idx].gid, gid, sizeof gid);
+
+    }
+//    my_dest.lid = ctx->portinfo.lid;
+//    if (ctx->portinfo.link_layer == IBV_LINK_LAYER_INFINIBAND && !my_dest.lid) {
+//        fprintf(stderr, "Couldn't get local LID\n");
+//        return 1;
+//    }
+
+//    if (gidx >= 0) {
+//        if (ibv_query_gid(ctx->context, ib_port, gidx, &my_dest.gid)) {
+//            fprintf(stderr, "Could not get local gid for gid index %d\n", gidx);
+//            return 1;
+//        }
+//    } else
+//        memset(&my_dest.gid, 0, sizeof my_dest.gid);
+//
+//    my_dest.qpn = ctx->qp->qp_num;
+//    my_dest.psn = lrand48() & 0xffffff;
+//    inet_ntop(AF_INET6, &my_dest.gid, gid, sizeof gid);
+//    printf("  local address:  LID 0x%04x, QPN 0x%06x, PSN 0x%06x, GID %s\n",
+//           my_dest.lid, my_dest.qpn, my_dest.psn, gid);
 
 
     if (servername) {
@@ -760,129 +878,181 @@ int main(int argc, char *argv[])
             fprintf(csv_fp,
                     "Message size,#sockets,#threads,Total latency,Total throughput,Total packet rate,\n");
         }
-        rem_dest = pp_client_exch_dest(servername, port, &my_dest);
+        for (int idx=0; idx<ctx->created_qps; idx++) {
+            rem_dest_array[idx] = pp_client_exch_dest(servername, port, &my_dest_array[idx]);
+            if (!rem_dest_array[idx])
+                return 1;
+
+            inet_ntop(AF_INET6, &rem_dest_array[idx]->gid, gid, sizeof gid);
+        }
+//        rem_dest = pp_client_exch_dest(servername, port, &my_dest);
     } else {
-        rem_dest = pp_server_exch_dest(ctx, ib_port, mtu, port, sl, &my_dest, gidx);
+        for (int idx=0; idx<ctx->created_qps; idx++) {
+            rem_dest_array[idx] = pp_server_exch_dest(ctx, ib_port, mtu, port, sl, &my_dest_array[idx], gidx);
+            if (!rem_dest_array[idx])
+                return 1;
+
+            inet_ntop(AF_INET6, &rem_dest_array[idx]->gid, gid, sizeof gid);
+        }
+//        rem_dest = pp_server_exch_dest(ctx, ib_port, mtu, port, sl, &my_dest, gidx);
     }
 
-    if (!rem_dest)
-        return 1;
+//    if (!rem_dest)
+//        return 1;
 
-    inet_ntop(AF_INET6, &rem_dest->gid, gid, sizeof gid);
-    printf("  remote address: LID 0x%04x, QPN 0x%06x, PSN 0x%06x, GID %s\n",
-           rem_dest->lid, rem_dest->qpn, rem_dest->psn, gid);
+//    inet_ntop(AF_INET6, &rem_dest->gid, gid, sizeof gid);
+//    printf("  remote address: LID 0x%04x, QPN 0x%06x, PSN 0x%06x, GID %s\n",
+//           rem_dest->lid, rem_dest->qpn, rem_dest->psn, gid);
 
     if (servername)
-        if (pp_connect_ctx(ctx, ib_port, my_dest.psn, mtu, sl, rem_dest, gidx))
-            return 1;
+        for (int idx=0; idx<ctx->created_qps; idx++) {
+            if (pp_connect_ctx(ctx, ib_port, my_dest_array[idx].psn, mtu, sl, rem_dest_array[idx], gidx))
+                return 1;
+
+        }
+//        if (pp_connect_ctx(ctx, ib_port, my_dest.psn, mtu, sl, rem_dest, gidx))
+//            return 1;
 
     if (servername) {
 
-        /* Set chrono clocks*/
-        struct timeval cycle_start, cycle_end;
-        struct timeval lat_start, lat_end;
-        max_throughput_result = 0.0;
+        while(ctx->active_qps <= ctx->created_qps) {
+            /* Set chrono clocks*/
+            struct timeval cycle_start, cycle_end;
+            struct timeval lat_start, lat_end;
+            max_throughput_result = 0.0;
 
-        /* init calculations */
-        long long cycle_bytes_transferred = 2 * IB_PACKET_PER_CYCLE * (long long) size;
-        long bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
+            /* init calculations */
+            long long cycle_bytes_transferred =
+                    2 * IB_PACKET_PER_CYCLE * (long long) size * ctx->active_qps;
+            long bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
 
-        /* Measure throughput for pre defined # of cycle */
-        int i;
-        for (i = 0; i < iters; i++) {
-            if (gettimeofday(&cycle_start, NULL)) {
+            /* Measure throughput for pre defined # of cycle */
+            int i;
+            for (i = 0; i < iters; i++) {
+                if (gettimeofday(&cycle_start, NULL)) {
+                    perror("gettimeofday");
+                    return 1;
+                }
+
+                /* Sending continuously pre defined # of packets */
+                if ((i != 0) && (i % tx_depth == 0)) {
+                    pp_wait_completions(ctx, tx_depth * ctx->active_qps);
+                }
+
+                for (int qp_idx = 0; qp_idx < ctx->active_qps; qp_idx++) {
+                    if (pp_post_send(ctx, qp_idx)) {
+                        fprintf(stderr, "Client couldn't post send\n");
+                        return 1;
+                    }
+                }
+//                if (pp_post_send(ctx)) {
+//                    fprintf(stderr, "Client couldn't post send\n");
+//                    return 1;
+//                }
+
+                if (gettimeofday(&cycle_end, NULL)) {
+                    perror("gettimeofday");
+                    return 1;
+                }
+
+                double cycle_time_usec = (cycle_end.tv_sec - cycle_start.tv_sec) * 1000000 +
+                                         (cycle_end.tv_usec - cycle_start.tv_usec);
+
+                double cycle_time_sec = (cycle_end.tv_sec - cycle_start.tv_sec) +
+                                        ((cycle_end.tv_usec - cycle_start.tv_usec) * 1000000);
+
+                double cycle_throughput = bits_transferred_per_cycle / cycle_time_sec;
+
+                if (cycle_throughput > max_throughput_result) {
+                    max_throughput_result = cycle_throughput;
+                }
+            }
+
+            /* packet rate */
+            packet_rate_result = max_throughput_result / size;
+
+            /* latency */
+            if (gettimeofday(&lat_start, NULL)) {
                 perror("gettimeofday");
                 return 1;
             }
+            /* Send 1 packet with (size_t) packet_size */
 
-            /* Sending continuously pre defined # of packets */
-            if ((i != 0) && (i % tx_depth == 0)) {
-                pp_wait_completions(ctx, tx_depth);
-            }
-            if (pp_post_send(ctx)) {
+            if (pp_post_send(ctx, 0)) {
                 fprintf(stderr, "Client couldn't post send\n");
                 return 1;
             }
 
-            if (gettimeofday(&cycle_end, NULL)) {
+            /* Send 1 packet with (size_t) packet_size */
+//            if (pp_post_send(ctx)) {
+//                fprintf(stderr, "Client couldn't post send\n");
+//                return 1;
+//            }
+            /* Receive 1 packet with (size_t) packet_size */
+            pp_wait_completions(ctx, 1);
+
+            if (gettimeofday(&lat_end, NULL)) {
                 perror("gettimeofday");
                 return 1;
             }
 
-            double cycle_time_usec = (cycle_end.tv_sec - cycle_start.tv_sec) * 1000000 +
-                                    (cycle_end.tv_usec - cycle_start.tv_usec);
+            double rtt_ms = ((lat_end.tv_sec - lat_start.tv_sec) * 1000) +
+                            ((lat_end.tv_usec - lat_start.tv_usec) / 100);
+            latency_result = rtt_ms / 2;
 
-            double cycle_time_sec = (cycle_end.tv_sec - cycle_start.tv_sec) +
-                                   ((cycle_end.tv_usec - cycle_start.tv_usec)  * 1000000);
 
-            double cycle_throughput = bits_transferred_per_cycle / cycle_time_sec;
+            char *packet_unit = "Bytes";
+            char *rate_unit;
+            if (max_throughput_result >= GIGABIT_IN_BITS) {
+                max_throughput_result /= GIGABIT_IN_BITS;
+                rate_unit = "Gbps";
 
-            if (cycle_throughput > max_throughput_result) {
-                max_throughput_result = cycle_throughput;
+            } else if (max_throughput_result >= MEGABIT_IN_BITS) {
+                max_throughput_result /= MEGABIT_IN_BITS;
+                rate_unit = "Mbps";
+
+            } else if (max_throughput_result >= KILOBIT_IN_BITS) {
+                max_throughput_result /= KILOBIT_IN_BITS;
+                rate_unit = "Kbps";
+
+            } else {
+                rate_unit = "bps";
             }
-        }
 
-        /* packet rate */
-        packet_rate_result =  max_throughput_result / size;
-
-        /* latency */
-        if (gettimeofday(&lat_start, NULL)) {
-            perror("gettimeofday");
-            return 1;
-        }
-        /* Send 1 packet with (size_t) packet_size */
-        if (pp_post_send(ctx)) {
-            fprintf(stderr, "Client couldn't post send\n");
-            return 1;
-        }
-        /* Receive 1 packet with (size_t) packet_size */
-        pp_wait_completions(ctx, 1);
-
-        if (gettimeofday(&lat_end, NULL)) {
-            perror("gettimeofday");
-            return 1;
-        }
-
-        double rtt_ms = ((lat_end.tv_sec - lat_start.tv_sec) * 1000) +
-                        ((lat_end.tv_usec - lat_start.tv_usec) / 100);
-        latency_result = rtt_ms / 2;
-
-
-        char * packet_unit = "Bytes";
-        char * rate_unit;
-        if (max_throughput_result >= GIGABIT_IN_BITS) {
-            max_throughput_result /= GIGABIT_IN_BITS;
-            rate_unit = "Gbps";
-
-        } else if (max_throughput_result >= MEGABIT_IN_BITS) {
-            max_throughput_result /= MEGABIT_IN_BITS;
-            rate_unit = "Mbps";
-
-        } else if (max_throughput_result >= KILOBIT_IN_BITS) {
-            max_throughput_result /= KILOBIT_IN_BITS;
-            rate_unit = "Kbps";
-
-        } else {
-            rate_unit = "bps";
+            if (SAVE_RESULTS_TO_CSV) {
+                fprintf(csv_fp, CSV_RESULTS_FORMAT, (long) size, packet_unit, ctx->active_qps, 1, latency_result,
+                        "milliseconds",
+                        max_throughput_result, rate_unit, packet_rate_result, "packets/second");
+            } else {
+                printf(RESULTS_FORMAT, (long) size, packet_unit, 1, 1, latency_result,
+                       "milliseconds",
+                       max_throughput_result, rate_unit, packet_rate_result, "packets/second");
+            }
+            ctx->active_qps++;
         }
 
         if (SAVE_RESULTS_TO_CSV) {
-            fprintf(csv_fp, CSV_RESULTS_FORMAT, (long) size, packet_unit, 1, 1, latency_result, "milliseconds",
-                    max_throughput_result, rate_unit, packet_rate_result, "packets/second");
             fclose(csv_fp);
-        } else {
-            printf(RESULTS_FORMAT, (long) size, packet_unit, 1, 1, latency_result, "milliseconds",
-                   max_throughput_result, rate_unit, packet_rate_result, "packets/second");
         }
         printf("Client Done.\n");
 
     } else {
-        if (pp_post_send(ctx)) {
-            fprintf(stderr, "Server couldn't post send\n");
-            return 1;
+        while (ctx->active_qps <= ctx->created_qps) {
+            for (int qp_idx = 0; qp_idx < ctx->active_qps; qp_idx++) {
+                if (pp_post_send(ctx, qp_idx)) {
+                    fprintf(stderr, "Server couldn't post send\n");
+                    return 1;
+                }
+                pp_wait_completions(ctx, iters * ctx->active_qps);
+                pp_wait_completions(ctx, 1);
+            }
         }
-        pp_wait_completions(ctx, iters);
-        pp_wait_completions(ctx, 1);
+//        if (pp_post_send(ctx)) {
+//            fprintf(stderr, "Server couldn't post send\n");
+//            return 1;
+//        }
+//        pp_wait_completions(ctx, iters);
+//        pp_wait_completions(ctx, 1);
         printf("Server Done.\n");
     }
 
