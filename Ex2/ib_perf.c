@@ -28,7 +28,8 @@
 #define MEGABIT_IN_BITS 1000000
 #define GIGABIT_IN_BITS 1000000000
 
-#define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
+#define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%Lf\t%s\n"
+#define CSV_RESULTS_FORMAT "%ld\t%s,%u,%d,%f\t%s,%.3f\t%s,%Lf\t%s,\n"
 #define SAVE_RESULTS_TO_CSV true //todo set true when submit
 
 #define IB_PACKET_PER_CYCLE 100
@@ -611,7 +612,7 @@ int main(int argc, char *argv[])
     char                     gid[33];
 
     double max_throughput_result = 0.0;
-    double packet_rate_result = 0.0;
+    long double packet_rate_result = 0.0;
     double latency_result = 0.0;
     bool inc_msgs_size = false;
     bool multi_streams = false;
@@ -866,8 +867,9 @@ int main(int argc, char *argv[])
         }
 
         if (SAVE_RESULTS_TO_CSV) {
-            fprintf(csv_fp, RESULTS_FORMAT, (long) size, packet_unit, 1, 1, latency_result, "milliseconds",
+            fprintf(csv_fp, CSV_RESULTS_FORMAT, (long) size, packet_unit, 1, 1, latency_result, "milliseconds",
                     max_throughput_result, rate_unit, packet_rate_result, "packets/second");
+            fclose(csv_fp);
         } else {
             printf(RESULTS_FORMAT, (long) size, packet_unit, 1, 1, latency_result, "milliseconds",
                    max_throughput_result, rate_unit, packet_rate_result, "packets/second");
