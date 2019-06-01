@@ -204,7 +204,7 @@ static struct pingpong_dest *pp_client_exch_dest(const char *servername, int por
     if (asprintf(&service, "%d", port) < 0)
         return NULL;
 
-    printf("**%s***", servername);
+    printf("\n**%s***\n", servername);
     n = getaddrinfo(servername, service, &hints, &res);
 
     if (n < 0) {
@@ -715,6 +715,11 @@ int main(int argc, char *argv[])
         }
     }
 
+    printf("\n**%s***\n", servername);
+    printf("\n**args:%d***\n", argc);
+    for (int i=0; i<argc; i++) {
+        printf("\n**%s***\n", argv[i]);
+    }
     if (optind == argc - 1)
         servername = strdup(argv[optind]);
     else if (optind < argc) {
