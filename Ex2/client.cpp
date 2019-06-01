@@ -69,7 +69,7 @@ Client::Client(const char * serverIP, bool multiStreams) {
 
     if (SAVE_RESULTS_TO_CSV) {
         /* open csv file */
-        this->results_file.open("tcp1.csv", std::ofstream::app);
+        this->results_file.open("tcp.csv", std::ofstream::app);
         //todo fix this line
         this->results_file << "Message size,#sockets,#threads,Total latency,Total throughput,Total packet rate,";
         this->results_file << std::endl;
