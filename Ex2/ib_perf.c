@@ -413,7 +413,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
     }
 
     for (int i=0; i < ctx->created_qps; i++) {
-        ctx->cq_array[i] = ibv_create_cq(ctx->context, rx_depth + tx_depth, NULL, ctx->channel, 0);
+        ctx->cq_array[i] = &ibv_create_cq(ctx->context, rx_depth + tx_depth, NULL, ctx->channel, 0);
         if (!(ctx->cq_array[i])) {
             fprintf(stderr, "Couldn't create CQ\n");
             return NULL;
