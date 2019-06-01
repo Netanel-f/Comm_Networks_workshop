@@ -10,7 +10,7 @@ using fp_seconds = std::chrono::duration<double, std::chrono::seconds::period>;
  * This struct would contain info regarding specific socket
  */
 struct TCPSocket {
-    int socked_fd = -1;
+    int socket_fd = -1;
     char * read_buffer;
     double latency_result = 0.0;
 };
@@ -85,7 +85,7 @@ Client::Client(const char * serverIP, bool multiStreams) {
             socket_creation_failed = true;
         }
 
-        server_sockets[stream_idx].socked_fd = current_socket;
+        server_sockets[stream_idx].socket_fd = current_socket;
 
         memset(&server_address, 0, sizeof(server_address));
         server_address.sin_family = AF_INET;
@@ -167,14 +167,14 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
 
             for (unsigned int stream_idx = 0; stream_idx < num_of_active_streams; stream_idx++) {   //todo EXP CODE
                 /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
-                ssize_t ret_value = send(this->server_sockets[stream_idx].socked_fd, msg,
+                ssize_t ret_value = send(this->server_sockets[stream_idx].socket_fd, msg,
                                          packet_size, 0);
                 if (ret_value != packet_size) { print_error("send() failed", errno); }
             }
 
             for (unsigned int stream_idx = 0; stream_idx < num_of_active_streams; stream_idx++) {
                 /* Receive packet and verify the #bytes sent. */
-                int ret_value = recv(this->server_sockets[stream_idx].socked_fd, this->server_sockets[stream_idx].read_buffer, packet_size, 0);
+                int ret_value = recv(this->server_sockets[stream_idx].socket_fd, this->server_sockets[stream_idx].read_buffer, packet_size, 0);
                 if (ret_value < 0) { print_error("recv() failed", errno); }
             }
         }
@@ -219,11 +219,11 @@ void Client::measure_latency(TCPSocket * tcpSocket, char * msg, ssize_t packet_s
     start_time = steady_clock::now();
 
     /* Send 1 packet with (size_t) packet_size */
-    ssize_t ret_value = send(tcpSocket->socked_fd, msg, packet_size, 0);
+    ssize_t ret_value = send(tcpSocket->socket_fd, msg, packet_size, 0);
     if (ret_value != packet_size) { print_error("send() failed", errno); }
 
     /* Receive 1 packet with (size_t) packet_size */
-    ret_value = recv(tcpSocket->socked_fd, tcpSocket->read_buffer, packet_size, 0);
+    ret_value = recv(tcpSocket->socket_fd, tcpSocket->read_buffer, packet_size, 0);
     if (ret_value < 0) { print_error("recv() failed", errno); }
 
     end_time = steady_clock::now();
@@ -306,8 +306,8 @@ void Client::kill_client() {
 
     for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
         delete(this->server_sockets[stream_idx].read_buffer);
-        shutdown(this->server_sockets[stream_idx].socked_fd, SHUT_RDWR);
-        close(this->server_sockets[stream_idx].socked_fd);
+        shutdown(this->server_sockets[stream_idx].socket_fd, SHUT_RDWR);
+        close(this->server_sockets[stream_idx].socket_fd);
     }
 }
 
