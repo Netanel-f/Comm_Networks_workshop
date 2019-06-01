@@ -341,6 +341,7 @@ void Client::run_tests(bool incremental_msg_size) {
     }
 
     while (num_of_active_streams <= num_of_streams) {
+        if (DEBUG) { printf("\n** num_of_active_streams %d", num_of_active_streams); }
         /* Measure throughput and latency , for exponential series of message sizes */
         for (ssize_t packet_size = ONE_BYTE; packet_size <= max_packet_size; packet_size = packet_size << 1u) {
 
@@ -354,6 +355,7 @@ void Client::run_tests(bool incremental_msg_size) {
             for (unsigned int stream_idx = 0; stream_idx < num_of_active_streams; stream_idx++) {
                 measure_latency(&this->server_sockets[stream_idx], msg, packet_size);
             }
+            if (DEBUG) { printf("** packet_size %ld", packet_size); }
 
             print_results(packet_size);
         }
