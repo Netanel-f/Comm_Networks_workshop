@@ -48,8 +48,23 @@
 
 #include <infiniband/verbs.h>
 
-#include "shared.h"
+#include <stdbool.h>
+#define BYTES_TO_BITS 8
 
+
+#define ONE_BYTE 1
+#define MEGABYTE_IN_KILOBYTES 1024
+#define MEGABYTE_IN_BYTES 1048576
+
+
+#define KILOBIT_IN_BITS 1000
+#define MEGABIT_IN_BITS 1000000
+#define GIGABIT_IN_BITS 1000000000
+
+#define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
+
+#define IB_PACKET_PER_CYCLE 100
+#define IB_NUM_OF_CYCLE 1000
 #define WC_BATCH (10)
 
 enum {
@@ -793,8 +808,8 @@ int main(int argc, char *argv[])
         max_throughput_result = 0.0;
 
         /* init calculations */
-        auto cycle_bytes_transferred = 2 * IB_PACKET_PER_CYCLE * size;
-        auto bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
+        long long cycle_bytes_transferred = 2 * IB_PACKET_PER_CYCLE * (long long) size;
+        long bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
 
         /* Measure throughput for pre defined # of cycle */
         int i;
@@ -818,13 +833,13 @@ int main(int argc, char *argv[])
                 return 1;
             }
 
-            float cycle_time_usec = (cycle_end.tv_sec - cycle_start.tv_sec) * 1000000 +
+            double cycle_time_usec = (cycle_end.tv_sec - cycle_start.tv_sec) * 1000000 +
                                     (cycle_end.tv_usec - cycle_start.tv_usec);
 
-            float cycle_time_sec = (cycle_end.tv_sec - cycle_start.tv_sec) +
+            double cycle_time_sec = (cycle_end.tv_sec - cycle_start.tv_sec) +
                                    ((cycle_end.tv_usec - cycle_start.tv_usec)  * 1000000);
 
-            auto cycle_throughput = bits_transferred_per_cycle / cycle_time_sec;
+            double cycle_throughput = bits_transferred_per_cycle / cycle_time_sec;
 
             if (cycle_throughput > max_throughput_result) {
                 max_throughput_result = cycle_throughput;
@@ -853,8 +868,8 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        float rtt_ms = (cycle_end.tv_sec - cycle_start.tv_sec) * 1000000 +
-                                (cycle_end.tv_usec - cycle_start.tv_usec);
+        double rtt_ms = ((lat_end.tv_sec - lat_start.tv_sec) * 1000) +
+                        ((lat_end.tv_usec - lat_start.tv_usec) / 100);
         latency_result = rtt_ms / 2;
 
 
@@ -876,6 +891,7 @@ int main(int argc, char *argv[])
             rate_unit = "bps";
         }
 
+        //#define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
         printf(RESULTS_FORMAT, (long)size, packet_unit, 1,
                1, latency_result, "milliseconds",
                max_throughput_result, rate_unit, packet_rate_result, "packets/second");
