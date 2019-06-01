@@ -1,36 +1,3 @@
-/*
- * Copyright (c) 2005 Topspin Communications.  All rights reserved.
- * Copyright (c) 2006 Cisco Systems.  All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,6 +29,7 @@
 #define GIGABIT_IN_BITS 1000000000
 
 #define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
+#define SAVE_RESULTS_TO_CSV true //todo set true when submit
 
 #define IB_PACKET_PER_CYCLE 100
 #define IB_NUM_OF_CYCLE 1000
@@ -648,6 +616,7 @@ int main(int argc, char *argv[])
     bool inc_msgs_size = false;
     bool multi_streams = false;
     bool multi_threads = false;
+    FILE * csv_fp;
     srand48(getpid() * time(NULL));
 
     while (1) {
@@ -784,10 +753,16 @@ int main(int argc, char *argv[])
            my_dest.lid, my_dest.qpn, my_dest.psn, gid);
 
 
-    if (servername)
+    if (servername) {
+        if (SAVE_RESULTS_TO_CSV) {
+            csv_fp = fopen("infiniband.csv", "w+");
+            fprintf(csv_fp,
+                    "Message size,#sockets,#threads,Total latency,Total throughput,Total packet rate,\n");
+        }
         rem_dest = pp_client_exch_dest(servername, port, &my_dest);
-    else
+    } else {
         rem_dest = pp_server_exch_dest(ctx, ib_port, mtu, port, sl, &my_dest, gidx);
+    }
 
     if (!rem_dest)
         return 1;
@@ -848,7 +823,6 @@ int main(int argc, char *argv[])
 
         /* packet rate */
         packet_rate_result =  max_throughput_result / size;
-        printf("Client Done.\n");
 
         /* latency */
         if (gettimeofday(&lat_start, NULL)) {
@@ -891,10 +865,14 @@ int main(int argc, char *argv[])
             rate_unit = "bps";
         }
 
-        //#define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
-        printf(RESULTS_FORMAT, (long)size, packet_unit, 1,
-               1, latency_result, "milliseconds",
-               max_throughput_result, rate_unit, packet_rate_result, "packets/second");
+        if (SAVE_RESULTS_TO_CSV) {
+            fprintf(csv_fp, RESULTS_FORMAT, (long) size, packet_unit, 1, 1, latency_result, "milliseconds",
+                    max_throughput_result, rate_unit, packet_rate_result, "packets/second");
+        } else {
+            printf(RESULTS_FORMAT, (long) size, packet_unit, 1, 1, latency_result, "milliseconds",
+                   max_throughput_result, rate_unit, packet_rate_result, "packets/second");
+        }
+        printf("Client Done.\n");
 
     } else {
         if (pp_post_send(ctx)) {
