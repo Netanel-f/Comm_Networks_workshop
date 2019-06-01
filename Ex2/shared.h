@@ -30,8 +30,6 @@ using namespace std::chrono;
 
 #define RTT_PACKETS_PER_CYCLE 100
 #define RTT_NUM_OF_CYCLES 10
-//#define RTT_PACKETS_PER_CYCLE 1000
-//#define RTT_NUM_OF_CYCLES 100
 #define BYTES_TO_BITS 8
 
 
