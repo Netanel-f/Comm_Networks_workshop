@@ -59,8 +59,8 @@ struct pingpong_context {
     struct ibv_port_attr	portinfo;
     int created_qps;
     int active_qps;
-    struct ibv_cq cq_array[IB_MAX_QPS];
-    struct ibv_qp qp_array[IB_MAX_QPS];
+    struct ibv_cq * cq_array[IB_MAX_QPS];
+    struct ibv_qp * qp_array[IB_MAX_QPS];
     struct ibv_port_attr	portinfo_array[IB_MAX_QPS];
     int routs_array[IB_MAX_QPS];
     int rx_depths_array[IB_MAX_QPS];
@@ -413,7 +413,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
     }
 
     for (int i=0; i < ctx->created_qps; i++) {
-        ctx->cq_array[i] = &ibv_create_cq(ctx->context, rx_depth + tx_depth, NULL, ctx->channel, 0);
+        ctx->cq_array[i] = ibv_create_cq(ctx->context, rx_depth + tx_depth, NULL, ctx->channel, 0);
         if (!(ctx->cq_array[i])) {
             fprintf(stderr, "Couldn't create CQ\n");
             return NULL;
@@ -608,7 +608,7 @@ static int pp_post_send(struct pingpong_context *ctx, int qp_idx)
     return ibv_post_send(ctx->qp_array[qp_idx], &wr, &bad_wr);
 }
 
-int pp_wait_completions(struct pingpong_context *ctx, int iters)
+int pp_wait_completions(struct pingpong_context *ctx, int cq_idx, int iters)
 {
     int rcnt = 0, scnt = 0;
     while (rcnt + scnt < iters) {
@@ -616,7 +616,8 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters)
         int ne, i;
 
         do {
-            ne = ibv_poll_cq(ctx->cq, WC_BATCH, wc);
+//            ne = ibv_poll_cq(ctx->cq, WC_BATCH, wc);
+            ne = ibv_poll_cq(ctx->cq_array[cq_idx], WC_BATCH, wc);
             if (ne < 0) {
                 fprintf(stderr, "poll CQ failed %d\n", ne);
                 return 1;
@@ -639,11 +640,14 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters)
 
                 case PINGPONG_RECV_WRID:
                     if (--ctx->routs <= 10) {
-                        ctx->routs += pp_post_recv(ctx, ctx->rx_depth - ctx->routs);
-                        if (ctx->routs < ctx->rx_depth) {
+                        ctx->routs += pp_post_recv(ctx, cq_idx, ctx->rx_depths_array[cq_idx] - ctx->routs_array[cq_idx]);
+//                        ctx->routs += pp_post_recv(ctx, ctx->rx_depth - ctx->routs);
+//                        if (ctx->routs < ctx->rx_depth) {
+                        if (ctx->routs_array[cq_idx] < ctx->rx_depths_array[cq_idx]) {
                             fprintf(stderr,
                                     "Couldn't post receive (%d)\n",
-                                    ctx->routs);
+                                    ctx->routs_array[cq_idx]);
+//                                    ctx->routs);
                             return 1;
                         }
                     }
@@ -936,7 +940,10 @@ int main(int argc, char *argv[])
 
                 /* Sending continuously pre defined # of packets */
                 if ((i != 0) && (i % tx_depth == 0)) {
-                    pp_wait_completions(ctx, tx_depth * ctx->active_qps);
+                    for (int qp_idx = 0; qp_idx < ctx->active_qps; qp_idx++) {
+                        pp_wait_completions(ctx, qp_idx, tx_depth);
+                    }
+//                    pp_wait_completions(ctx, tx_depth * ctx->active_qps);
                 }
 
                 for (int qp_idx = 0; qp_idx < ctx->active_qps; qp_idx++) {
@@ -989,7 +996,7 @@ int main(int argc, char *argv[])
 //                return 1;
 //            }
             /* Receive 1 packet with (size_t) packet_size */
-            pp_wait_completions(ctx, 1);
+            pp_wait_completions(ctx, 0, 1);
 
             if (gettimeofday(&lat_end, NULL)) {
                 perror("gettimeofday");
@@ -1043,8 +1050,8 @@ int main(int argc, char *argv[])
                     fprintf(stderr, "Server couldn't post send\n");
                     return 1;
                 }
-                pp_wait_completions(ctx, iters * ctx->active_qps);
-                pp_wait_completions(ctx, 1);
+                pp_wait_completions(ctx, qp_idx,  iters);
+                pp_wait_completions(ctx, qp_idx, 1);
             }
         }
 //        if (pp_post_send(ctx)) {
@@ -1057,6 +1064,9 @@ int main(int argc, char *argv[])
     }
 
     ibv_free_device_list(dev_list);
-    free(rem_dest);
+    for (int idx=0; idx < ctx->created_qps; idx++){
+        free(rem_dest_array[idx]);
+    }
+//    free(rem_dest);
     return 0;
 }
