@@ -14,7 +14,7 @@ TARSRCS = ${ALL} ${EXE} Makefile
 CLIENT = shared.h client.cpp
 SERVER = shared.h server.cpp
 EXE = client server ib_perf
-ALL = client.cpp server.cpp shared.h 
+ALL = client.cpp server.cpp shared.h tcp.csv infiniband.csv
 
 default: all
 
