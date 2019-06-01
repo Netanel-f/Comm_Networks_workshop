@@ -42,7 +42,7 @@ private:
 
     //// Keeping private variables to store results.
     double max_throughput_result = 0.0;
-    double packet_rate_result = 0.0;
+    long double packet_rate_result = 0.0;
     double latency_result = 0.0;
     std::ofstream results_file;
 };
@@ -70,7 +70,6 @@ Client::Client(const char * serverIP, bool multiStreams) {
     if (SAVE_RESULTS_TO_CSV) {
         /* open csv file */
         this->results_file.open("tcp.csv", std::ofstream::app);
-        //todo fix this line
         this->results_file << "Message size,#sockets,#threads,Total latency,Total throughput,Total packet rate,";
         this->results_file << std::endl;
     }
