@@ -23,3 +23,6 @@ add_executable(ex2server ${EX2_SERVER_SRC})
 
 set(EX2_CLIENT_SRC ${EX2_CLIENT})
 add_executable(ex2client ${EX2_CLIENT_SRC})
+
+set(EX2_IB Ex2/ib_perf.c)
+add_executable(ex2ib ${EX2_IB})
