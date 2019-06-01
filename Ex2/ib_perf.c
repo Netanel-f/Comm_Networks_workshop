@@ -29,7 +29,7 @@
 #define GIGABIT_IN_BITS 1000000000
 
 #define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%Lf\t%s\n"
-#define CSV_RESULTS_FORMAT "%ld\t%s,%u,%d,%f\t%s,%.3f\t%s,%Lf\t%s,\n"
+#define CSV_RESULTS_FORMAT "%ld %s,%u,%d,%f %s,%.3f %s,%Lf %s,\n"
 #define SAVE_RESULTS_TO_CSV true //todo set true when submit
 
 #define IB_PACKET_PER_CYCLE 100
