@@ -27,7 +27,7 @@ using namespace std::chrono;
 #define MAX_PARALLEL_STREAMS 10
 #define MIN_PARALLEL_STREAMS 1
 
-#define MIN_SECONDS_TO_WARMUP 20
+#define MIN_SECONDS_TO_WARMUP 5
 
 #define RTT_PACKETS_PER_CYCLE 100
 #define RTT_NUM_OF_CYCLES 10
@@ -43,12 +43,10 @@ using namespace std::chrono;
 #define MEGABIT_IN_BITS 1000000
 #define GIGABIT_IN_BITS 1000000000
 
-//#define RESULTS_FORMAT "%ld\t%f\t%s\t%.3f\t%s\t%f\t%s\n"
 // msg size\t #sockets\t #threads\t total latency\t total throughput\t total packet rate
-#define RESULTS_HEADER "Msg size:\t#Sockets:\t#Threads:\tTotal latency:\tTotal throughput:\tTotal packet rate:\n"
 #define RESULTS_FORMAT "%ld\t%s\t%u\t%d\t%f\t%s\t%.3f\t%s\t%Lf\t%s\n"
-#define SAVE_RESULTS_TO_CSV true //todo set true when submit
+#define SAVE_RESULTS_TO_CSV true //set true when submit
 
-#define DEBUG true
+#define DEBUG false
 
 #endif //COMM_NETS_SHARED_H

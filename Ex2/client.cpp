@@ -21,13 +21,12 @@ struct TCPSocket {
  */
 class Client {
     TCPSocket server_sockets[MAX_PARALLEL_STREAMS];
-    unsigned int num_of_streams = MIN_PARALLEL_STREAMS;
-    unsigned int num_of_active_streams = MIN_PARALLEL_STREAMS;
+    unsigned int num_of_streams = 1;
     unsigned int num_of_threads = 1;
 
 public:
     //// C-tor
-    explicit Client(const char * serverIP, bool multiStreams);
+    explicit Client(const char * serverIP, unsigned int num_of_streams);
     //// client actions
     void run_tests(bool incremental_msg_size);
     void kill_client();
@@ -52,17 +51,14 @@ private:
  * Thie method will create Client Object and will connect the client to server
  * @param serverIP - the server destination ipv4 format.
  */
-Client::Client(const char * serverIP, bool multiStreams) {
+Client::Client(const char * serverIP, unsigned int num_of_streams) {
 
     if (num_of_streams > MAX_PARALLEL_STREAMS) {
-        print_error("num of streams is over the limit", 1);
+        printf("num_of_streams > 10.\n");
+        exit(EXIT_FAILURE);
     }
 
-    if (multiStreams) {
-        this->num_of_streams = MAX_PARALLEL_STREAMS;
-    } else {
-        this->num_of_streams = MIN_PARALLEL_STREAMS;
-    }
+    this->num_of_streams = num_of_streams;
 
     /* setup sockets and structs */
     struct sockaddr_in server_address;
@@ -76,7 +72,6 @@ Client::Client(const char * serverIP, bool multiStreams) {
 
     /* create sockets */
     for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
-        printf("ste %u\n", stream_idx);
         bool socket_creation_failed = false;
 
         int current_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -152,7 +147,7 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
     this->max_throughput_result = 0.0;
 
     /* init calculations */
-    auto cycle_bytes_transferred = this->num_of_active_streams * 2 * RTT_PACKETS_PER_CYCLE * packet_size;
+    auto cycle_bytes_transferred = this->num_of_streams * 2 * RTT_PACKETS_PER_CYCLE * packet_size;
     auto bits_transferred_per_cycle = cycle_bytes_transferred * BYTES_TO_BITS;
 
     /* Init the packet message to send*/
@@ -165,14 +160,14 @@ void Client::measure_throughput(char * msg, ssize_t packet_size) {
         /* Sending continuously pre defined # of packets */
         for (int packet_index = 0; packet_index < RTT_PACKETS_PER_CYCLE; packet_index++) {
 
-            for (unsigned int stream_idx = 0; stream_idx < num_of_active_streams; stream_idx++) {   //todo EXP CODE
+            for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
                 /* Send packet and verify the #bytes sent equal to #bytes requested to sent. */
                 ssize_t ret_value = send(this->server_sockets[stream_idx].socket_fd, msg,
                                          packet_size, 0);
                 if (ret_value != packet_size) { print_error("send() failed", errno); }
             }
 
-            for (unsigned int stream_idx = 0; stream_idx < num_of_active_streams; stream_idx++) {
+            for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
                 /* Receive packet and verify the #bytes sent. */
                 int ret_value = recv(this->server_sockets[stream_idx].socket_fd, this->server_sockets[stream_idx].read_buffer, packet_size, 0);
                 if (ret_value < 0) { print_error("recv() failed", errno); }
@@ -273,15 +268,15 @@ void Client::print_results(ssize_t packet_size) {
     }
 
     // calc total latency:
-    for (unsigned int stream_idx = 0; stream_idx < this->num_of_active_streams; stream_idx++) {
+    for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
         this->latency_result += this->server_sockets[stream_idx].latency_result;
     }
 
-    this->latency_result /= this->num_of_active_streams;
+    this->latency_result /= this->num_of_streams;
 
     if (SAVE_RESULTS_TO_CSV) {
         this->results_file << packet_size << " " << packet_unit << ",";
-        this->results_file << this->num_of_active_streams << ",";
+        this->results_file << this->num_of_streams << ",";
         this->results_file << this->num_of_threads << ",";
         this->results_file << this->latency_result << " " << "milliseconds" << ",";
         this->results_file << this->max_throughput_result << " " << rate_unit << ",";
@@ -328,7 +323,8 @@ void Client::print_error(const std::string& function_name, int error_number) {
  */
 void Client::run_tests(bool incremental_msg_size) {
 
-    for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) { //todo
+    for (unsigned int stream_idx = 0; stream_idx < this->num_of_streams; stream_idx++) {
+        if (DEBUG) { printf("warming stream_idx %d\n", stream_idx); }
         /* warm up until latency converges */
         warm_up(&(this->server_sockets[stream_idx]));
     }
@@ -336,29 +332,26 @@ void Client::run_tests(bool incremental_msg_size) {
     ssize_t max_packet_size = ONE_BYTE;
 
     if (incremental_msg_size) {
-        max_packet_size = MEGABYTE_IN_BYTES;
+        max_packet_size = MEGABYTE_IN_BYTES + 1;
     }
 
-    while (num_of_active_streams <= num_of_streams) {
-        if (DEBUG) { printf("\n** num_of_active_streams %d", num_of_active_streams); }
-        /* Measure throughput and latency , for exponential series of message sizes */
-        for (ssize_t packet_size = ONE_BYTE; packet_size <= max_packet_size; packet_size = packet_size << 1u) {
 
-            /* Init the packet message to send*/
-            char msg[packet_size];
+    /* Measure throughput and latency , for exponential series of message sizes */
+    for (ssize_t packet_size = ONE_BYTE; packet_size <= max_packet_size; packet_size = packet_size << 1u) {
 
-            /* Preforming tests and printing results */
-            measure_throughput(msg, packet_size);
-            calculate_packet_rate(packet_size);
+        /* Init the packet message to send*/
+        char msg[packet_size];
 
-            for (unsigned int stream_idx = 0; stream_idx < num_of_active_streams; stream_idx++) {
-                measure_latency(&this->server_sockets[stream_idx], msg, packet_size);
-            }
-            if (DEBUG) { printf("** packet_size %ld", packet_size); }
+        /* Preforming tests and printing results */
+        measure_throughput(msg, packet_size);
+        calculate_packet_rate(packet_size);
 
-            print_results(packet_size);
+        for (unsigned int stream_idx = 0; stream_idx < num_of_streams; stream_idx++) {
+            measure_latency(&this->server_sockets[stream_idx], msg, packet_size);
         }
-        num_of_active_streams++;
+        if (DEBUG) { printf("** packet_size %ld", packet_size); }
+
+        print_results(packet_size);
     }
 }
 
@@ -369,14 +362,16 @@ int main(int argc, char const *argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    unsigned int num_of_sockets = 1;
     /* Create client object and connect to given server-ip and incremental streams. */
-    Client client = Client(argv[1], true);
+    Client client = Client(argv[1], num_of_sockets);
 
     /* run tests with incremental message size */
     client.run_tests(true);
 
     /* Close client and disconnect from server */
     client.kill_client();
+
     return EXIT_SUCCESS;
 }
 
