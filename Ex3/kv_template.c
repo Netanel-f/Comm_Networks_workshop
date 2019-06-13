@@ -1201,8 +1201,8 @@ int main(int argc, char **argv)
 
     g_argc = argc;
     g_argv = argv;
-//    if (argc > 1) {
-    if (argc == 1) {//todo
+    if (argc > 1) {
+//    if (argc == 1) {//todo
         run_server();
         printf("end of run_server\n");//todo
     }
@@ -1210,7 +1210,7 @@ int main(int argc, char **argv)
 #ifdef EX4
     assert(0 == my_open(servers, indexer, &kv_ctx));
 #else
-    servers[0].servername = NULL;//todo test
+//    servers[0].servername = NULL;//todo test
     assert(0 == my_open(&servers[0], &kv_ctx));
 #endif
 
