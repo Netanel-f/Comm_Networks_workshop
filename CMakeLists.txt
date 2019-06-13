@@ -31,7 +31,7 @@ add_executable(ex2ib ${EX2_IB})
 
 include_directories(/Users/netanel/Downloads/libibverbs-1.2.1/include)
 
-set(EX3_SRC Ex3/main.cpp)
+set(EX3_SRC Ex3/kv_template.c)
 add_executable(ex3 ${EX3_SRC})
 #set(EX3_TMP_SRC Ex3/kv_template.c)
 #add_executable(ex3template ${EX3_TMP_SRC})
