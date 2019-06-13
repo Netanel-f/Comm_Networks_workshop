@@ -862,13 +862,6 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 	printf("  local address:  LID 0x%04x, QPN 0x%06x, PSN 0x%06x, GID %s\n",
 	       my_dest.lid, my_dest.qpn, my_dest.psn, gid);
 
-    if (DEBUG) {
-        if (servername)//todo
-            printf("servername true =  %s\n", servername);
-        else
-            printf("servername false =  %s\n", servername);
-
-    }
 	if (servername)
 		rem_dest = pp_client_exch_dest(servername, port, &my_dest);
 	else
@@ -885,13 +878,9 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 		if (pp_connect_ctx(ctx, ib_port, my_dest.psn, mtu, sl, rem_dest, gidx))
 			return 1;
 
-    if (DEBUG) { printf("after connect\n"); }
     ibv_free_device_list(dev_list);
-    if (DEBUG) { printf("after connect\n"); }
     free(rem_dest);
-    if (DEBUG) { printf("after connect\n"); }
     *result_ctx = ctx;
-    if (DEBUG) { printf("after connect\n"); }
     return 0;
 }
 
