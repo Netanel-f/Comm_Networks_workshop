@@ -945,10 +945,10 @@ int kv_set(void *kv_handle, const char *key, const char *value)
         set_packet->type = EAGER_SET_REQUEST;
         /* TODO (4LOC): fill in the rest of the set_packet */
         strncat(set_packet->eager_set_request.key_and_value, key, strlen(key));
-        strncat(set_packet->eager_set_request.key_and_value, '\0', 1);
+        strncat(set_packet->eager_set_request.key_and_value, "\0", 1);
         strncat(set_packet->eager_set_request.key_and_value, value, strlen(value));
 
-
+        if (DEBUG) { printf("before send\n"); }
         pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
         return pp_wait_completions(ctx, 1); /* await EAGER_SET_REQUEST completion */
     }
@@ -1213,7 +1213,6 @@ int main(int argc, char **argv)
 #ifdef EX4
     assert(0 == my_open(servers, indexer, &kv_ctx));
 #else
-//    servers[0].servername = NULL;//todo test
     assert(0 == my_open(&servers[0], &kv_ctx));
 #endif
 
