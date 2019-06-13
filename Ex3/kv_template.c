@@ -49,6 +49,7 @@
 #include <infiniband/verbs.h>
 
 #define EX3 //todo
+#define DEBUG 1//todo
 
 #ifdef EX4
 #include <fcntl.h>
@@ -861,12 +862,13 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 	printf("  local address:  LID 0x%04x, QPN 0x%06x, PSN 0x%06x, GID %s\n",
 	       my_dest.lid, my_dest.qpn, my_dest.psn, gid);
 
+    if (DEBUG) {
+        if (servername)//todo
+            printf("servername true =  %s\n", servername);
+        else
+            printf("servername false =  %s\n", servername);
 
-	if (servername)//todo
-        printf("servername true =  %s\n", servername);
-	else
-        printf("servername false =  %s\n", servername);
-
+    }
 	if (servername)
 		rem_dest = pp_client_exch_dest(servername, port, &my_dest);
 	else
@@ -883,9 +885,13 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 		if (pp_connect_ctx(ctx, ib_port, my_dest.psn, mtu, sl, rem_dest, gidx))
 			return 1;
 
+    if (DEBUG) { printf("after connect\n"); }
     ibv_free_device_list(dev_list);
+    if (DEBUG) { printf("after connect\n"); }
     free(rem_dest);
+    if (DEBUG) { printf("after connect\n"); }
     *result_ctx = ctx;
+    if (DEBUG) { printf("after connect\n"); }
     return 0;
 }
 
@@ -940,6 +946,7 @@ int kv_open(struct kv_server_address *server, void **kv_handle)
 
 int kv_set(void *kv_handle, const char *key, const char *value)
 {
+    if (DEBUG) { printf("in kv_set\n"); }
     struct pingpong_context *ctx = kv_handle;
     struct packet *set_packet = (struct packet*)ctx->buf;
 
@@ -1209,9 +1216,9 @@ int main(int argc, char **argv)
     g_argv = argv;
 //    if (argc > 1) {
     if (argc == 1) {//todo
-        printf("going run_server\n");//todo
+        if (DEBUG) { printf("going run_server\n"); }//todo
         run_server();
-        printf("end of run_server\n");//todo
+        if (DEBUG) { printf("end of run_server\n"); }//todo
     }
 
 #ifdef EX4
