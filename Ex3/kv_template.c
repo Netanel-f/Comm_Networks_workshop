@@ -862,6 +862,11 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 	       my_dest.lid, my_dest.qpn, my_dest.psn, gid);
 
 
+	if (servername)//todo
+        printf("servername true =  %s\n", servername);
+	else
+        printf("servername false =  %s\n", servername);
+
 	if (servername)
 		rem_dest = pp_client_exch_dest(servername, port, &my_dest);
 	else
@@ -1203,6 +1208,7 @@ int main(int argc, char **argv)
     g_argv = argv;
 //    if (argc > 1) {
     if (argc == 1) {//todo
+        printf("going run_server\n");//todo
         run_server();
         printf("end of run_server\n");//todo
     }
