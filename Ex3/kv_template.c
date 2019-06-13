@@ -1201,8 +1201,8 @@ int main(int argc, char **argv)
 
     g_argc = argc;
     g_argv = argv;
-    if (argc > 1) {
-//    if (argc == 1) {//todo
+//    if (argc > 1) {
+    if (argc == 1) {//todo
         run_server();
         printf("end of run_server\n");//todo
     }
