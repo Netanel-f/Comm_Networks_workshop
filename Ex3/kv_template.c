@@ -50,6 +50,19 @@
 
 #define EX3 //todo
 #define DEBUG 1//todo
+/* todo */
+
+struct KV_NODE {
+    struct KV_NODE * next;
+    struct KV_NODE * prev;
+    unsigned kv_length;
+    char key_and_value[0];
+};
+
+struct KV_NODE * head;
+struct KV_NODE temp;
+int num_of_nodes = 0;
+
 
 #ifdef EX4
 #include <fcntl.h>
@@ -89,10 +102,11 @@ struct packet {
 
         struct {
             /* TODO */
+            char key[0];
         } eager_get_request;
 		
         struct {
-            unsigned value_length;
+            unsigned int value_length;
             char value[0];
         } eager_get_response;
 
@@ -101,6 +115,7 @@ struct packet {
 #ifdef EX4
             unsigned value_length; /* value is binary, so needs to have length! */
 #endif
+            unsigned int value_length;
             char key_and_value[0]; /* null terminator between key and value */
         } eager_set_request;
 
@@ -451,6 +466,7 @@ out:
 }
 
 #include <sys/param.h>
+#include <stdbool.h>
 
 static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 					    int rx_depth, int port,
@@ -616,7 +632,9 @@ static int pp_post_recv(struct pingpong_context *ctx, int n)
 
 static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key)
 {
-	struct ibv_sge list = {
+    if (DEBUG) { printf("inpp_post_send:%d\n", ((struct packet * )ctx->buf)->type); }
+
+    struct ibv_sge list = {
 		.addr	= (uintptr_t) (local_ptr ? local_ptr : ctx->buf),
 		.length = size,
 		.lkey	= ctx->mr->lkey
@@ -660,23 +678,129 @@ static void usage(const char *argv0)
 
 void handle_server_packets_only(struct pingpong_context *ctx, struct packet *packet)
 {
-	unsigned response_size = 0;
-	
+    if (DEBUG) { printf("handle server packets\n"); }
+
+    unsigned response_size = 0;
+
+    struct KV_NODE * cur_node = head;
+    bool keep_search = true;
+
+    if (DEBUG) { printf("in handle_server packet type:%d\n", packet->type); }
     switch (packet->type) {
-	/* Only handle packets relevant to the server here - client will handle inside get/set() calls */
-    case EAGER_GET_REQUEST: /* TODO (10LOC): handle a short GET() on the server */
-    case EAGER_SET_REQUEST: /* TODO (10LOC): handle a short SET() on the server */
 
-    case RENDEZVOUS_GET_REQUEST: /* TODO (10LOC): handle a long GET() on the server */
-    case RENDEZVOUS_SET_REQUEST: /* TODO (20LOC): handle a long SET() on the server */
+        /* Only handle packets relevant to the server here - client will handle inside get/set() calls */
+        case EAGER_GET_REQUEST: /* TODO (10LOC): handle a short GET() on the server */
 
-#ifdef EX4
-    case FIND: /* TODO (2LOC): use some hash function */
-#endif
-    default:
-        break;
+            if (DEBUG) { printf("in handle_server EAGER GET REQ\n"); }
+            if (DEBUG) { printf("in handle_server %s\n", packet->eager_get_request.key); }
+            if (DEBUG) {
+                unsigned int le = strlen(cur_node->key_and_value);
+                printf("%s  %s\n", cur_node->key_and_value, &cur_node->key_and_value[le]);
+            }
+            int key_len = strlen(packet->eager_get_request.key);
+
+            if (num_of_nodes == 0) {
+                struct packet * response_packet = (struct packet*) ctx->buf;
+                memset(response_packet->eager_get_response.value, '\0', 1);
+                response_packet->eager_get_response.value_length = 1;
+                response_size = sizeof(response_packet);
+            } else {
+                while (keep_search) {
+                    if (strcmp(packet->eager_get_request.key, cur_node->key_and_value) == 0) {
+                        /* found match */
+                        if (DEBUG) { printf("handle: found match\n"); }
+                        struct packet *response_packet = ctx->buf;
+                        if (DEBUG) { printf("handle: currNode %s\n", &(cur_node->key_and_value[key_len+1])); }
+                        response_packet->type = EAGER_GET_RESPONSE;
+                        strcpy(response_packet->eager_get_response.value,
+                               &(cur_node->key_and_value[key_len+1]));
+
+                        response_packet->eager_get_response.value_length = strlen(
+                                response_packet->eager_get_response.value);
+                        response_size = sizeof(struct packet) + response_packet->eager_get_response.value_length;
+                        if (DEBUG) { printf("handle: resp %s\n", response_packet->eager_get_response.value); }
+                        break;
+                    } else if (cur_node->next != NULL) {
+                        if (DEBUG) { printf("handle: no match YET\n"); }
+                        /* no match, yet */
+                        cur_node = cur_node->next;
+                    } else {
+                        /* key is not exists on server, respond "" */
+                        if (DEBUG) { printf("handle: NO match\n"); }
+                        struct packet *response_packet = ctx->buf;
+                        response_packet->type = EAGER_GET_RESPONSE;
+                        memset(response_packet->eager_get_response.value, '\0', 1);
+                        response_packet->eager_get_response.value_length = 1;
+                        response_size = sizeof(response_packet);
+                        break;
+                    }
+                }
+            }
+            break;
+
+        case EAGER_SET_REQUEST: /* TODO (10LOC): handle a short SET() on the server */
+            if (DEBUG) { printf("in handle_server EAGER SET REQ\n"); }
+            unsigned int vlength = packet->eager_set_request.value_length;
+            if (DEBUG) { printf("in handle_server vlen:%d\n", vlength); }
+
+            if (num_of_nodes == 0) {
+                if (DEBUG) { printf("in handle_server num==0\n"); }
+                int key_len = strlen(packet->eager_set_request.key_and_value);
+                head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_len +2+ vlength);
+                head->kv_length = vlength;
+
+                memcpy(head->key_and_value, packet->eager_set_request.key_and_value, key_len+2+vlength);
+                memset(&(head->key_and_value[key_len+1+vlength]), '\0', 2);
+//                strncat(head->key_and_value, strchr(packet->eager_set_request.key_and_value, '\0'));
+                if (DEBUG) { printf("in handle_server set val%s\n", head->key_and_value); }
+                if (DEBUG) { printf("in handle_server set val%s\n", &(head->key_and_value[key_len+1])); }
+                if (DEBUG) { printf("in handle_server set val%s\n", &(head->key_and_value[key_len+1+vlength])); }
+
+                head->next = NULL;
+                head->prev = NULL;
+                num_of_nodes++;
+                if (DEBUG) { printf("in handle_server break\n"); }
+
+                break;
+            }
+
+            while (keep_search) {
+                if (strcmp(cur_node->key_and_value, packet->eager_set_request.key_and_value) == 0) {
+                    /* found match */
+                    memcpy(cur_node->key_and_value, packet->eager_set_request.key_and_value, vlength);
+
+                } else if (cur_node->next != NULL) {
+                    /* no match, yet */
+                     cur_node = cur_node->next;
+                } else {
+                    /* key is not exists on server, appending it */
+                    cur_node->next = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + vlength);
+                    cur_node->next->kv_length = vlength;
+
+                    strncpy(cur_node->next->key_and_value, packet->eager_set_request.key_and_value, vlength);
+//                    strcpy(temp.value, strchr(packet->eager_set_request.key_and_value, '\0'));
+                    cur_node->next->next = NULL;
+                    cur_node->next->prev = cur_node;
+                    num_of_nodes++;
+                    break;
+                }
+            }
+            break;
+        case RENDEZVOUS_GET_REQUEST: /* TODO (10LOC): handle a long GET() on the server */
+        case RENDEZVOUS_SET_REQUEST: /* TODO (20LOC): handle a long SET() on the server */
+
+        case EAGER_GET_RESPONSE:
+            if (DEBUG) { printf("wait: EAGER GET RESP\n"); }
+
+            return;
+    #ifdef EX4
+        case FIND: /* TODO (2LOC): use some hash function */
+    #endif
+        default:
+            break;
     }
-	
+
+    if (DEBUG) { printf("in handle_server response_size %d\n", response_size); }
 	if (response_size) {
 		pp_post_send(ctx, IBV_WR_SEND, response_size, NULL, NULL, 0);
 	}
@@ -886,6 +1010,8 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 
 int pp_wait_completions(struct pingpong_context *ctx, int iters)
 {
+    if (DEBUG) { printf("wait complete\n"); }
+
     int rcnt, scnt, num_cq_events, use_event = 0;
 	rcnt = scnt = 0;
 	while (rcnt + scnt < iters) {
@@ -909,12 +1035,15 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters)
 				return 1;
 			}
 
+			if (DEBUG) { printf("waitcomp%d\n",(int) wc[i].wr_id); }
 			switch ((int) wc[i].wr_id) {
 			case PINGPONG_SEND_WRID:
+			    ++scnt;
 				break;
 
 			case PINGPONG_RECV_WRID:
-				handle_server_packets_only(ctx, (struct packet*)&ctx->buf);
+			    ++rcnt;
+				handle_server_packets_only(ctx, (struct packet*)ctx->buf);
 				pp_post_recv(ctx, 1);
 				break;
 
@@ -940,16 +1069,24 @@ int kv_set(void *kv_handle, const char *key, const char *value)
     struct packet *set_packet = (struct packet*)ctx->buf;
 
     unsigned packet_size = strlen(key) + strlen(value) + sizeof(struct packet);
+    if (DEBUG) { printf("in kv_set packet_size %d type%d\n", packet_size, EAGER_SET_REQUEST); }
+
     if (packet_size < (EAGER_PROTOCOL_LIMIT)) {
         /* Eager protocol - exercise part 1 */
         set_packet->type = EAGER_SET_REQUEST;
         /* TODO (4LOC): fill in the rest of the set_packet */
-        strncat(set_packet->eager_set_request.key_and_value, key, strlen(key));
-        strncat(set_packet->eager_set_request.key_and_value, "\0", 1);
-        strncat(set_packet->eager_set_request.key_and_value, value, strlen(value));
+        set_packet->eager_set_request.value_length = strlen(value);
+        strncpy(set_packet->eager_set_request.key_and_value, key, strlen(key));
+        strncpy(&(set_packet->eager_set_request.key_and_value[strlen(key)]), "\0", 1);
+        strncpy(&set_packet->eager_set_request.key_and_value[strlen(key)+1], value, strlen(value));
+        memset(&(set_packet->eager_set_request.key_and_value[strlen(key)+1+strlen(value)]), '\0', 1);
+        if (DEBUG) { printf("kv-set: set packet size %d\n", packet_size); }
+        if (DEBUG) { printf("kv-set: set packet keyval: %s\n", set_packet->eager_set_request.key_and_value); }
+        if (DEBUG) { printf("kv-set: set packet keyval: %s\n", &set_packet->eager_set_request.key_and_value[strlen(key)+1]); }
 
         if (DEBUG) { printf("before send\n"); }
         pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
+        if (DEBUG) { printf("after send\n"); }
         return pp_wait_completions(ctx, 1); /* await EAGER_SET_REQUEST completion */
     }
 
@@ -968,6 +1105,38 @@ int kv_set(void *kv_handle, const char *key, const char *value)
 
 int kv_get(void *kv_handle, const char *key, char **value)
 {
+    if (DEBUG) { printf("in kv_get\n"); }
+    struct pingpong_context *ctx = kv_handle;
+    struct packet *get_packet = (struct packet*)ctx->buf;
+
+    unsigned packet_size = strlen(key) + sizeof(struct packet);
+    if (DEBUG) { printf("in kv_get packet_size %d\n", packet_size); }
+
+    if (packet_size < (EAGER_PROTOCOL_LIMIT)) {
+        /* Eager protocol - exercise part 1 */
+        get_packet->type = EAGER_GET_REQUEST;
+
+        strncpy(get_packet->eager_get_request.key, key, strlen(key));
+        if (DEBUG) { printf("before send\n"); }
+
+        pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
+        if (DEBUG) { printf("after send\n"); }
+
+        pp_wait_completions(ctx, 1); /* await EAGER_GET_REQUEST completion */
+        pp_wait_completions(ctx, 1); /* await EAGER_SET_REQUEST completion */
+        struct pingpong_context * kv_handle_temp = (struct pingpong_context *) kv_handle;
+
+        struct packet* resp = (struct packet *) kv_handle_temp->buf;
+        if (DEBUG) { printf("kv_get: %s\n", resp->eager_get_response.value); }
+        unsigned int value_len = resp->eager_get_response.value_length;
+        if (DEBUG) { printf("kv_get:before copy value len: %d\n", value_len); }
+
+        memcpy(*value, resp->eager_get_response.value, value_len);
+        memset(&(*value[value_len+1]), '\0', 1);
+        return value_len;
+    }
+
+
     return 0; /* TODO (25LOC): similar to SET, only no n*/
 }
 
@@ -1172,7 +1341,9 @@ void run_server()
     struct kv_server_address server = {0};
     server.port = 12345;
     assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
+    if (DEBUG) { printf("run_server origmain done\n"); }
     while (0 <= pp_wait_completions(ctx, 1));
+    if (DEBUG) { printf("run_server down wait compleation\n"); }
     pp_close_ctx(ctx);
 }
 
@@ -1219,9 +1390,14 @@ int main(int argc, char **argv)
     /* Test small size */
     assert(100 < MAX_TEST_SIZE);
     memset(send_buffer, 'a', 100);
+    if (DEBUG) { printf("main: before set\n"); }
     assert(0 == set(kv_ctx, "1", send_buffer));
+    if (DEBUG) { printf("main: before get\n"); }
     assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("send: %s\n", send_buffer); }
+    if (DEBUG) { printf("recv: %s\n", recv_buffer); }
     assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("main: before release\n"); }
     release(recv_buffer);
 
     /* Test logic */
