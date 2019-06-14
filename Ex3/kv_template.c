@@ -55,7 +55,7 @@
 struct KV_NODE {
     struct KV_NODE * next;
     struct KV_NODE * prev;
-    unsigned kv_length;
+    unsigned int kv_length;
     char key_and_value[0];
 };
 
@@ -121,6 +121,7 @@ struct packet {
 
         struct {
             /* TODO */
+            // TODO N: previously mentioned: EAGER_SET_RESPONSE - not needed!
         } eager_set_response;
 
         /* RENDEZVOUS PROTOCOL PACKETS */
@@ -705,18 +706,25 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                 response_size = sizeof(response_packet);
             } else {
                 while (keep_search) {
+
+                    if (DEBUG && cur_node != NULL) {
+                        printf("handle: cur node key %s\n", cur_node->key_and_value);
+                        printf("handle: cur node val %s\n", &(cur_node->key_and_value[key_len+1]));
+                    }
                     if (strcmp(packet->eager_get_request.key, cur_node->key_and_value) == 0) {
                         /* found match */
                         if (DEBUG) { printf("handle: found match\n"); }
                         struct packet *response_packet = ctx->buf;
                         if (DEBUG) { printf("handle: currNode %s\n", &(cur_node->key_and_value[key_len+1])); }
                         response_packet->type = EAGER_GET_RESPONSE;
-                        strcpy(response_packet->eager_get_response.value,
-                               &(cur_node->key_and_value[key_len+1]));
+                        unsigned int val_len = cur_node->kv_length;
+                        memcpy(response_packet->eager_get_response.value, &(cur_node->key_and_value[key_len+1]), val_len);
+                        if (DEBUG) { printf("handle: after memcpy: %s\n", response_packet->eager_get_response.value); }
+                        memset(&(response_packet->eager_get_response.value[val_len]), '\0', 1);
+                        if (DEBUG) { printf("handle: after memset: %s\n", response_packet->eager_get_response.value); }
 
-                        response_packet->eager_get_response.value_length = strlen(
-                                response_packet->eager_get_response.value);
-                        response_size = sizeof(struct packet) + response_packet->eager_get_response.value_length;
+                        response_packet->eager_get_response.value_length = val_len;
+                        response_size = sizeof(struct packet) + val_len;
                         if (DEBUG) { printf("handle: resp %s\n", response_packet->eager_get_response.value); }
                         break;
                     } else if (cur_node->next != NULL) {
@@ -739,19 +747,22 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
         case EAGER_SET_REQUEST: /* TODO (10LOC): handle a short SET() on the server */
             if (DEBUG) { printf("in handle_server EAGER SET REQ\n"); }
+            if (DEBUG) { printf("in handle_server key is: %s\n", packet->eager_set_request.key_and_value); }
+            int set_key_len = strlen(packet->eager_set_request.key_and_value);
+
             unsigned int vlength = packet->eager_set_request.value_length;
             if (DEBUG) { printf("in handle_server vlen:%d\n", vlength); }
 
             if (num_of_nodes == 0) {
                 if (DEBUG) { printf("in handle_server num==0\n"); }
-                int key_len = strlen(packet->eager_set_request.key_and_value);
-                head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_len +2+ vlength);
+//                int key_len = strlen(packet->eager_set_request.key_and_value);
+                head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + set_key_len +2+ vlength);
                 head->kv_length = vlength;
 
-                memcpy(head->key_and_value, packet->eager_set_request.key_and_value, key_len+1+vlength);
-                memset(&(head->key_and_value[key_len+1+vlength]), '\0', 2);
+                memcpy(head->key_and_value, packet->eager_set_request.key_and_value, set_key_len+1+vlength);
+                memset(&(head->key_and_value[set_key_len+1+vlength]), '\0', 2);
                 if (DEBUG) { printf("in handle_server set key: %s\n", head->key_and_value); }
-                if (DEBUG) { printf("in handle_server set val: %s\n", &(head->key_and_value[key_len+1])); }
+                if (DEBUG) { printf("in handle_server set val: %s\n", &(head->key_and_value[set_key_len+1])); }
 
                 head->next = NULL;
                 head->prev = NULL;
@@ -760,22 +771,52 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
                 break;
             }
+            if (DEBUG) { printf("in handle_server need to search\n"); }
 
             while (keep_search) {
+                if (DEBUG) { printf("in handle_server cur key: %s\n", cur_node->key_and_value); }
+
                 if (strcmp(cur_node->key_and_value, packet->eager_set_request.key_and_value) == 0) {
                     /* found match */
-                    memcpy(cur_node->key_and_value, packet->eager_set_request.key_and_value, vlength);
+                    if (DEBUG) { printf("in handle_server found match\n"); }
+                    struct KV_NODE * prev_node = cur_node->prev;
+                    struct KV_NODE * next_node = cur_node->next;
+                    free(cur_node);
+                    if (DEBUG) { printf("in handle_server before malloc\n"); }
+                    cur_node = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + set_key_len +2+ vlength);
+                    if (DEBUG) { printf("in handle_server before memcpy\n"); }
+                    memcpy(cur_node->key_and_value, packet->eager_set_request.key_and_value, set_key_len+1+vlength);
+                    if (DEBUG) { printf("in handle_server before memset\n"); }
+                    memset(&(head->key_and_value[set_key_len+1+vlength]), '\0', 2);
+                    if (DEBUG) { printf("in handle_server before fixing pointers\n"); }
+                    if (prev_node != NULL) {
+                        prev_node->next = cur_node;
+                    }
+                    if (DEBUG) { printf("in handle_server before cur_node->prev = prev_node\n"); }
+                    cur_node->prev = prev_node;
+                    if (DEBUG) { printf("in handle_server before cur_node->next\n"); }
+                    cur_node->next = next_node;
+                    if (DEBUG) { printf("in handle_server before if\n"); }
+                    if (next_node != NULL) {
+                        next_node->prev = cur_node;
+                    }
+                    if (DEBUG) { printf("in handle_server before free old\n"); }
+                    break;
 
                 } else if (cur_node->next != NULL) {
                     /* no match, yet */
+                    if (DEBUG) { printf("in handle_server yet no match\n"); }
                      cur_node = cur_node->next;
                 } else {
                     /* key is not exists on server, appending it */
-                    cur_node->next = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + vlength);
+                    if (DEBUG) { printf("in handle_server key doesn't exists\n"); }
+                    cur_node->next = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + set_key_len + 2 + vlength);
                     cur_node->next->kv_length = vlength;
 
-                    strncpy(cur_node->next->key_and_value, packet->eager_set_request.key_and_value, vlength);
-//                    strcpy(temp.value, strchr(packet->eager_set_request.key_and_value, '\0'));
+                    memcpy(cur_node->next->key_and_value, packet->eager_set_request.key_and_value, set_key_len+1+vlength);
+                    if (DEBUG) { printf("in handle_server set key: %s\n", cur_node->next->key_and_value); }
+                    if (DEBUG) { printf("in handle_server set val: %s\n", &(cur_node->next->key_and_value[set_key_len+1])); }
+
                     cur_node->next->next = NULL;
                     cur_node->next->prev = cur_node;
                     num_of_nodes++;
@@ -1077,8 +1118,8 @@ int kv_set(void *kv_handle, const char *key, const char *value)
         strncpy(&set_packet->eager_set_request.key_and_value[strlen(key)+1], value, strlen(value));
         memset(&(set_packet->eager_set_request.key_and_value[strlen(key)+1+strlen(value)]), '\0', 1);
         if (DEBUG) { printf("kv-set: set packet size %d\n", packet_size); }
-        if (DEBUG) { printf("kv-set: set packet keyval: %s\n", set_packet->eager_set_request.key_and_value); }
-        if (DEBUG) { printf("kv-set: set packet keyval: %s\n", &set_packet->eager_set_request.key_and_value[strlen(key)+1]); }
+        if (DEBUG) { printf("kv-set: set packet key: %s\n", set_packet->eager_set_request.key_and_value); }
+        if (DEBUG) { printf("kv-set: set packet val: %s\n", &set_packet->eager_set_request.key_and_value[strlen(key)+1]); }
 
         if (DEBUG) { printf("before send\n"); }
         pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
@@ -1112,7 +1153,8 @@ int kv_get(void *kv_handle, const char *key, char **value)
         /* Eager protocol - exercise part 1 */
         get_packet->type = EAGER_GET_REQUEST;
 
-        strncpy(get_packet->eager_get_request.key, key, strlen(key));
+        memcpy(get_packet->eager_get_request.key, key, strlen(key));
+        memset(&(get_packet->eager_get_request.key[strlen(key)]), '\0', 1);
         if (DEBUG) { printf("before send\n"); }
 
         pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
@@ -1131,7 +1173,7 @@ int kv_get(void *kv_handle, const char *key, char **value)
         if (DEBUG) { printf("kv_get:before memcpy\n"); }
         memcpy(*value, resp->eager_get_response.value, value_len);
         if (DEBUG) { printf("kv_get:before memset\n"); }
-        memset(&((*value)[value_len+1]), '\0', 1);
+        memset(&((*value)[value_len]), '\0', 1);
         if (DEBUG) { printf("kv_get:after memset value: %s\n", *value); }
     }
 
@@ -1141,6 +1183,7 @@ int kv_get(void *kv_handle, const char *key, char **value)
 
 void kv_release(char *value)
 {
+    free(value);
     /* TODO (2LOC): free value */
 }
 
@@ -1386,41 +1429,156 @@ int main(int argc, char **argv)
     assert(0 == my_open(&servers[0], &kv_ctx));
 #endif
 
-    /* Test small size */
-    assert(100 < MAX_TEST_SIZE);
-    memset(send_buffer, 'a', 100);
-    if (DEBUG) { printf("main: before set\n"); }
-    assert(0 == set(kv_ctx, "1", send_buffer));
-    if (DEBUG) { printf("main: before get\n"); }
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    if (DEBUG) { printf("send: %s\n", send_buffer); }
-    if (DEBUG) { printf("recv: %s\n", recv_buffer); }
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    if (DEBUG) { printf("main: before release\n"); }
-    release(recv_buffer);
+    /* Test throughput */
+    // ONE BYTE 1
+    // ONE KB 1024
+    // THREE KB 3072
+    // unsigned packet_size = strlen(key) + 1 + strlen(value) + sizeof(struct packet);
+//    unsigned packet_struct_size = sizeof(struct packet);
+//    for (ssize_t value_size = 1; value_size < EAGER_PROTOCOL_LIMIT; value_size = value_size<< 1) {
+//        struct timeval start, end;
+//        double total_time_sec = 0.0;
+//        int total_bytes = 0;
+//        int total_attempts = 60;
+//        memset(send_buffer, 'a', 100);
+//
+//
+//        char key[3];
+//        for (int attempt = 0; attempt < total_attempts; attempt++) {
+//            sprintf(key, "%d", attempt);
+//            if (gettimeofday(&start, NULL)) {
+//                perror("gettimeofday");
+//                break;
+//            }
+//            set(kv_ctx, key, send_buffer);
+//            get(kv_ctx, key, &recv_buffer);
+//            if (gettimeofday(&end, NULL)) {
+//                perror("gettimeofday");
+//                break;
+//            }
+//            if (strcmp(send_buffer, recv_buffer) == 0) {
+//                double cycle_time_sec = (end.tv_sec - start.tv_sec) +
+//                        ((end.tv_usec - start.tv_usec) * 1000000);
+//                total_time_sec = total_time_sec + cycle_time_sec;
+//                int cycle_bytes =
+//                        strlen(key) + 1 + strlen(value_size) + packet_struct_size;
+//                total_bytes = total_bytes + cycle_bytes;
+//            }
+//        }
+//
+//        long total_bits_trans = total_bytes * 8;
+//        double throughput = total_bits_trans / total_time_sec;
+//        printf("Value size: %ld, Throughput: %f.3 bps\n", value_size, throughput);
+//    }
+//    /* Test small size */
+//    assert(100 < MAX_TEST_SIZE);
+//    memset(send_buffer, 'a', 100);
+//    if (DEBUG) { printf("main: before set\n"); }
+//    assert(0 == set(kv_ctx, "1", send_buffer));
+//    if (DEBUG) { printf("main: before get\n"); }
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    if (DEBUG) { printf("send: %s\n", send_buffer); }
+//    if (DEBUG) { printf("recv: %s\n", recv_buffer); }
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    if (DEBUG) { printf("main: before release\n"); }
+//    release(recv_buffer);
+//
+//    /* Test logic */
+//    if (DEBUG) { printf("main: before get 1\n"); }
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
+//    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    release(recv_buffer);
+//    memset(send_buffer, 'b', 100);
+//    if (DEBUG) { printf("main: before set 1\n"); }
+//    assert(0 == set(kv_ctx, "1", send_buffer));
+//    memset(send_buffer, 'c', 100);
+//    if (DEBUG) { printf("main: before set 2\n"); }
+//    assert(0 == set(kv_ctx, "22", send_buffer));
+//    memset(send_buffer, 'b', 100);
+//    if (DEBUG) { printf("main: before get 1\n"); }
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
+//    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    if (DEBUG) { printf("main: before release\n"); }
+//    release(recv_buffer);
+//
+//    /* Test large size */
+//    if (DEBUG) { printf("main: TEST LARGE SIZE\n"); }
+//
+//    memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
+//    if (DEBUG) { printf("main: before set 1 a\n"); }
+//    assert(0 == set(kv_ctx, "1", send_buffer));
+//    if (DEBUG) { printf("main: before set 333 a\n"); }
+//    assert(0 == set(kv_ctx, "333", send_buffer));
+//    if (DEBUG) { printf("main: before get 1\n"); }
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
+//    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    if (DEBUG) { printf("main: before release\n"); }
+//    release(recv_buffer);
 
-    /* Test logic */
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    release(recv_buffer);
-    memset(send_buffer, 'b', 100);
-    assert(0 == set(kv_ctx, "1", send_buffer));
-    memset(send_buffer, 'c', 100);
-    assert(0 == set(kv_ctx, "22", send_buffer));
-    memset(send_buffer, 'b', 100);
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    release(recv_buffer);
-
-    /* Test large size */
-    memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
-    assert(0 == set(kv_ctx, "1", send_buffer));
-    assert(0 == set(kv_ctx, "333", send_buffer));
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    release(recv_buffer);
+    printf("~~~throughput test\n");
+    unsigned packet_struct_size = sizeof(struct packet);
+    for (ssize_t value_size = 1; value_size < EAGER_PROTOCOL_LIMIT; value_size = value_size<< 1) {
+//    for (ssize_t value_size = 1; value_size < 2; value_size = value_size<< 1) {
+        struct timeval start, end;
+        double total_time_usec = 0.0;
+        int total_bytes = 0;
+        int total_attempts = 50;
+//        int total_attempts = 30;
+        memset(send_buffer, 'a', value_size);
 
 
+        if (gettimeofday(&start, NULL)) {
+            perror("gettimeofday");
+            break;
+        }
+
+        char key[10];
+        for (int attempt = 0; attempt < total_attempts; attempt++) {
+            sprintf(key, "%ld-%d", value_size,attempt);
+
+            printf("valSize%ld, test%d: before set\n", value_size, attempt);
+            set(kv_ctx, key, send_buffer);
+            if (DEBUG) { printf("valSize%ld, test%d: before get\n", value_size, attempt); }
+            get(kv_ctx, key, &recv_buffer);
+            assert(0 == strcmp(send_buffer, recv_buffer));
+
+//            if (DEBUG) { printf("valSize%ld, test%d: before strcmp\n", value_size, attempt); }
+
+//            if (strcmp(send_buffer, recv_buffer) == 0) {
+//                if (DEBUG) { printf("valSize%ld, test%d: taking times\n", value_size, attempt); }
+//
+//                double cycle_time_usec = ((end.tv_sec - start.tv_sec) * 1000000) +
+//                                        (end.tv_usec - start.tv_usec);
+//                total_time_usec = total_time_usec + cycle_time_usec;
+//                int cycle_bytes =
+//                        strlen(key) + 1 + value_size + packet_struct_size;
+//                total_bytes = total_bytes + cycle_bytes;
+//            }
+//            if (DEBUG) { printf("valSize%ld, test%d: after strcmp\n", value_size, attempt); }
+            total_bytes = total_bytes + strlen(key) + 1 + value_size + packet_struct_size;
+            release(recv_buffer);
+        }
+
+        if (gettimeofday(&end, NULL)) {
+            perror("gettimeofday");
+            break;
+        }
+
+        total_time_usec = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
+        long total_bits_trans = total_bytes * 8;
+        printf("total time usec: %lf\n", total_time_usec);
+        double total_time_sec = total_time_usec / 1000000;
+        printf("total time sec: %lf\n", total_time_sec);
+        double throughput = total_bits_trans / total_time_sec;
+        printf("Value size: %ld, Throughput: %.3f bps\n", value_size, throughput);
+        fflush(stdout);
+    }
 #ifdef EX4
 	recursive_fill_kv(TEST_LOCATION, kv_ctx);
 #endif
