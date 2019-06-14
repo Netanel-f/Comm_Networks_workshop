@@ -685,17 +685,16 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     struct KV_NODE * cur_node = head;
     bool keep_search = true;
 
-    if (DEBUG) { printf("in handle_server packet type:%d\n", packet->type); }
     switch (packet->type) {
 
         /* Only handle packets relevant to the server here - client will handle inside get/set() calls */
         case EAGER_GET_REQUEST: /* TODO (10LOC): handle a short GET() on the server */
 
             if (DEBUG) { printf("in handle_server EAGER GET REQ\n"); }
-            if (DEBUG) { printf("in handle_server %s\n", packet->eager_get_request.key); }
+            if (DEBUG) { printf("in handle_server key %s\n", packet->eager_get_request.key); }
             if (DEBUG) {
                 unsigned int le = strlen(cur_node->key_and_value);
-                printf("%s  %s\n", cur_node->key_and_value, &cur_node->key_and_value[le]);
+                printf("%s  %s\n", cur_node->key_and_value, &(cur_node->key_and_value[le+1]));
             }
             int key_len = strlen(packet->eager_get_request.key);
 
@@ -749,12 +748,10 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                 head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_len +2+ vlength);
                 head->kv_length = vlength;
 
-                memcpy(head->key_and_value, packet->eager_set_request.key_and_value, key_len+2+vlength);
+                memcpy(head->key_and_value, packet->eager_set_request.key_and_value, key_len+1+vlength);
                 memset(&(head->key_and_value[key_len+1+vlength]), '\0', 2);
-//                strncat(head->key_and_value, strchr(packet->eager_set_request.key_and_value, '\0'));
-                if (DEBUG) { printf("in handle_server set val%s\n", head->key_and_value); }
-                if (DEBUG) { printf("in handle_server set val%s\n", &(head->key_and_value[key_len+1])); }
-                if (DEBUG) { printf("in handle_server set val%s\n", &(head->key_and_value[key_len+1+vlength])); }
+                if (DEBUG) { printf("in handle_server set key: %s\n", head->key_and_value); }
+                if (DEBUG) { printf("in handle_server set val: %s\n", &(head->key_and_value[key_len+1])); }
 
                 head->next = NULL;
                 head->prev = NULL;
@@ -1068,8 +1065,7 @@ int kv_set(void *kv_handle, const char *key, const char *value)
     struct pingpong_context *ctx = kv_handle;
     struct packet *set_packet = (struct packet*)ctx->buf;
 
-    unsigned packet_size = strlen(key) + strlen(value) + sizeof(struct packet);
-    if (DEBUG) { printf("in kv_set packet_size %d type%d\n", packet_size, EAGER_SET_REQUEST); }
+    unsigned packet_size = strlen(key) + 1 + strlen(value) + sizeof(struct packet);
 
     if (packet_size < (EAGER_PROTOCOL_LIMIT)) {
         /* Eager protocol - exercise part 1 */
@@ -1131,12 +1127,15 @@ int kv_get(void *kv_handle, const char *key, char **value)
         unsigned int value_len = resp->eager_get_response.value_length;
         if (DEBUG) { printf("kv_get:before copy value len: %d\n", value_len); }
 
+        *value = (char *) malloc(value_len + 1);
+        if (DEBUG) { printf("kv_get:before memcpy\n"); }
         memcpy(*value, resp->eager_get_response.value, value_len);
-        memset(&(*value[value_len+1]), '\0', 1);
-        return value_len;
+        if (DEBUG) { printf("kv_get:before memset\n"); }
+        memset(&((*value)[value_len+1]), '\0', 1);
+        if (DEBUG) { printf("kv_get:after memset value: %s\n", *value); }
     }
 
-
+    printf("return 0\n");
     return 0; /* TODO (25LOC): similar to SET, only no n*/
 }
 
