@@ -194,11 +194,9 @@ struct pingpong_context {
 	struct ibv_comp_channel *channel;
 	struct ibv_pd		*pd;
 	struct ibv_mr		*mr;
-	struct ibv_mr		*remote_mr;
 	struct ibv_cq		*cq;
 	struct ibv_qp		*qp;
 	void			*buf;
-	void            *remote_buf;
 	int			 size;
 	int			 rx_depth;
     int          routs;
@@ -514,14 +512,6 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 
 	memset(ctx->buf, 0x7b + is_server, size);
 
-    ctx->remote_buf = malloc(roundup(MAX_TEST_SIZE, page_size));
-    if (!ctx->remote_buf) {
-        fprintf(stderr, "Couldn't allocate work buf.\n");
-        return NULL;
-    }
-
-    memset(ctx->remote_buf, 0x7b + is_server, MAX_TEST_SIZE);
-
 	ctx->context = ibv_open_device(ib_dev);
 	if (!ctx->context) {
 		fprintf(stderr, "Couldn't get context for %s\n",
@@ -544,17 +534,13 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 		return NULL;
 	}
 
-	ctx->mr = ibv_reg_mr(ctx->pd, ctx->buf, size, IBV_ACCESS_LOCAL_WRITE);
+//	ctx->mr = ibv_reg_mr(ctx->pd, ctx->buf, size, IBV_ACCESS_LOCAL_WRITE);
+	ctx->mr = ibv_reg_mr(ctx->pd, ctx->buf, size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
 	if (!ctx->mr) {
 		fprintf(stderr, "Couldn't register MR\n");
 		return NULL;
 	}
 
-    ctx->remote_mr = ibv_reg_mr(ctx->pd, ctx->remote_buf, MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
-    if (!ctx->remote_mr) {
-        fprintf(stderr, "Couldn't register MR\n");
-        return NULL;
-    }
 
 	ctx->cq = ibv_create_cq(ctx->context, rx_depth + 1, NULL,
 				ctx->channel, 0);
@@ -622,11 +608,6 @@ int pp_close_ctx(struct pingpong_context *ctx)
 		return 1;
 	}
 
-    if (ibv_dereg_mr(ctx->remote_mr)) {
-        fprintf(stderr, "Couldn't deregister MR\n");
-        return 1;
-    }
-
 	if (ibv_dealloc_pd(ctx->pd)) {
 		fprintf(stderr, "Couldn't deallocate PD\n");
 		return 1;
@@ -645,7 +626,6 @@ int pp_close_ctx(struct pingpong_context *ctx)
 	}
 
 	free(ctx->buf);
-	free(ctx->remote_buf);
 	free(ctx);
 
 	return 0;
@@ -896,8 +876,8 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
                 struct packet * response_packet = (struct packet*) ctx->buf;
                 response_packet->type = RENDEZVOUS_SET_RESPONSE;
-                response_packet->rndv_set_response.server_ptr = (uint64_t) ctx->remote_mr->addr;
-                response_packet->rndv_set_response.server_key = ctx->remote_mr->rkey;
+                response_packet->rndv_set_response.server_ptr = (uint64_t) ctx->mr->addr;
+                response_packet->rndv_set_response.server_key = ctx->mr->rkey;
 
                 printf("server key: %u\n", response_packet->rndv_set_response.server_key);
                 printf("server ptr: %lu\n", response_packet->rndv_set_response.server_ptr);
@@ -1240,7 +1220,8 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters)
 
 int kv_open(struct kv_server_address *server, void **kv_handle)
 {
-    return orig_main(server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, (struct pingpong_context **)kv_handle);
+//    return orig_main(server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, (struct pingpong_context **)kv_handle);
+    return orig_main(server, MAX_TEST_SIZE, g_argc, g_argv, (struct pingpong_context **)kv_handle);
 }
 
 int kv_set(void *kv_handle, const char *key, const char *value)
@@ -1585,7 +1566,8 @@ void run_server()
     struct pingpong_context *ctx;
     struct kv_server_address server = {0};
     server.port = 12345;
-    assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
+//    assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
+    assert(0 == orig_main(&server, MAX_TEST_SIZE, g_argc, g_argv, &ctx));
     while (0 <= pp_wait_completions(ctx, 1));
     pp_close_ctx(ctx);
 }
