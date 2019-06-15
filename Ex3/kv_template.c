@@ -155,7 +155,7 @@ struct packet {
         struct {
             /* TODO */
             uint64_t server_ptr;
-            uint32_t server_key;
+            unsigned int server_key;
         } rndv_set_response;
 
 		/* TODO - maybe there are more packet types? */
@@ -676,7 +676,6 @@ static int pp_post_recv(struct pingpong_context *ctx, int n)
 
 static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key)
 {
-//    if (DEBUG) { printf("inpp_post_send:%d\n", ((struct packet * )ctx->buf)->type); }
 
     struct ibv_sge list = {
 		.addr	= (uintptr_t) (local_ptr ? local_ptr : ctx->buf),
@@ -897,13 +896,12 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
                 struct packet * response_packet = (struct packet*) ctx->buf;
                 response_packet->type = RENDEZVOUS_SET_RESPONSE;
-//                response_packet->rndv_set_response.server_ptr = &(ctx->remote_buf);
                 response_packet->rndv_set_response.server_ptr = (uint64_t) ctx->remote_mr->addr;
-//                response_packet->rndv_set_response.server_key = ctx->remote_mr->rkey;
-//                response_packet->rndv_set_response.server_ptr = local_ptr;
-                printf("server key: %u\n", ctx->remote_mr->rkey);
+                response_packet->rndv_set_response.server_key = ctx->remote_mr->rkey;
+
                 printf("server key: %u\n", response_packet->rndv_set_response.server_key);
-                response_size = sizeof(response_packet);
+                printf("server ptr: %lu\n", response_packet->rndv_set_response.server_ptr);
+                response_size = sizeof(response_packet) + sizeof(uint64_t) + sizeof(unsigned int);
                 break;
             }
 
@@ -962,8 +960,10 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
         case EAGER_GET_RESPONSE:
 //            if (DEBUG) { printf("wait: EAGER GET RESP\n"); }
-
             return;
+        case RENDEZVOUS_SET_RESPONSE:
+            printf("RENDEZVOUS_SET_RESPONSE\n");
+            break;
         case CLOSE_CONNECTION:
             close_server = true;
             break;
@@ -975,7 +975,6 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             break;
     }
 
-//    if (DEBUG) { printf("in handle_server response_size %d\n", response_size); }
     printf("in handle_server response_size %d\n", response_size);
 	if (response_size) {
 		pp_post_send(ctx, IBV_WR_SEND, response_size, NULL, NULL, 0);
@@ -1276,32 +1275,26 @@ int kv_set(void *kv_handle, const char *key, const char *value)
     memset(&(set_packet->rndv_set_request.key[strlen(key)]), '\0', 1);
 
     // end netanel
-    printf("before pp_post_Recv\n");
     pp_post_recv(ctx, 1); /* Posts a receive-buffer for RENDEZVOUS_SET_RESPONSE */
-    printf("before pp_post_send\n");
     pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
-    printf("after  pp_post_send\n");
+
     assert(pp_wait_completions(ctx, 2) == 0); /* wait for both to complete */
 
-
     assert(set_packet->type == RENDEZVOUS_SET_RESPONSE);
-    struct pingpong_context * kv_handle_temp = (struct pingpong_context *) kv_handle;
 
-    struct packet* resp = (struct packet *) kv_handle_temp->buf;
-    printf("server key: %u\n", resp->rndv_set_response.server_key);
-
-    printf("setting packet\n");
-    // netanel
-    packet_size = strlen(value) + sizeof(struct packet);
+    ctx = kv_handle;
+    set_packet = (struct packet*)ctx->buf;
     uint64_t s_ptr = set_packet->rndv_set_response.server_ptr;
     uint32_t s_key = set_packet->rndv_set_response.server_key;
 
     printf("server key: %u\n", s_key);
+    printf("server key: %u\n", set_packet->rndv_set_response.server_key);
+    printf("server key: %lu\n", set_packet->rndv_set_response.server_ptr);
     // end netanel
     printf("before pp_post_send WRITE value:\n");
+    packet_size = sizeof(set_packet) + value_length;
 //    pp_post_send(ctx, IBV_WR_RDMA_WRITE, packet_size, value, NULL, 0/* TODO (1LOC): replace with remote info for RDMA_WRITE from packet */);
-    pp_post_send(ctx, IBV_WR_RDMA_WRITE, strlen(value), value, &s_ptr, s_key);
-//    pp_post_send(ctx, IBV_WR_RDMA_WRITE, 1, "a", (void*) server_ptr, server_key);
+    pp_post_send(ctx, IBV_WR_RDMA_WRITE, strlen(value), value, (void *)s_ptr, s_key);
     printf("after  pp_post_send WRITE\n");
     return pp_wait_completions(ctx, 1); /* wait for both to complete */
 }
@@ -1667,49 +1660,33 @@ int main(int argc, char **argv)
     assert(0 == my_open(&servers[0], &kv_ctx));
 #endif
 
-    /* Test small size */
-    assert(100 < MAX_TEST_SIZE);
-    memset(send_buffer, 'a', 100);
-    if (DEBUG) { printf("main: before set\n"); }
-    assert(0 == set(kv_ctx, "1", send_buffer));
-    if (DEBUG) { printf("main: before get\n"); }
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    if (DEBUG) { printf("send: %s\n", send_buffer); }
-    if (DEBUG) { printf("recv: %s\n", recv_buffer); }
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    if (DEBUG) { printf("main: before release\n"); }
-    release(recv_buffer);
-
-    /* Test logic */
-    if (DEBUG) { printf("main: before get 1\n"); }
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
-    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    release(recv_buffer);
-    memset(send_buffer, 'b', 100);
-    if (DEBUG) { printf("main: before set 1\n"); }
-    assert(0 == set(kv_ctx, "1", send_buffer));
-    memset(send_buffer, 'c', 100);
-    if (DEBUG) { printf("main: before set 2\n"); }
-    assert(0 == set(kv_ctx, "22", send_buffer));
-    memset(send_buffer, 'b', 100);
-    if (DEBUG) { printf("main: before get 1\n"); }
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
-    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    if (DEBUG) { printf("main: before release\n"); }
-    release(recv_buffer);
-
-//    /* Test large size */
-//    if (DEBUG) { printf("main: TEST LARGE SIZE\n"); }
-//
-//    memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
-//    if (DEBUG) { printf("main: before set 1 a\n"); }
+//    /* Test small size */
+//    assert(100 < MAX_TEST_SIZE);
+//    memset(send_buffer, 'a', 100);
+//    if (DEBUG) { printf("main: before set\n"); }
 //    assert(0 == set(kv_ctx, "1", send_buffer));
-//    if (DEBUG) { printf("main: before set 333 a\n"); }
-//    assert(0 == set(kv_ctx, "333", send_buffer));
+//    if (DEBUG) { printf("main: before get\n"); }
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    if (DEBUG) { printf("send: %s\n", send_buffer); }
+//    if (DEBUG) { printf("recv: %s\n", recv_buffer); }
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    if (DEBUG) { printf("main: before release\n"); }
+//    release(recv_buffer);
+//
+//    /* Test logic */
+//    if (DEBUG) { printf("main: before get 1\n"); }
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
+//    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    release(recv_buffer);
+//    memset(send_buffer, 'b', 100);
+//    if (DEBUG) { printf("main: before set 1\n"); }
+//    assert(0 == set(kv_ctx, "1", send_buffer));
+//    memset(send_buffer, 'c', 100);
+//    if (DEBUG) { printf("main: before set 2\n"); }
+//    assert(0 == set(kv_ctx, "22", send_buffer));
+//    memset(send_buffer, 'b', 100);
 //    if (DEBUG) { printf("main: before get 1\n"); }
 //    assert(0 == get(kv_ctx, "1", &recv_buffer));
 //    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
@@ -1717,6 +1694,22 @@ int main(int argc, char **argv)
 //    assert(0 == strcmp(send_buffer, recv_buffer));
 //    if (DEBUG) { printf("main: before release\n"); }
 //    release(recv_buffer);
+
+    /* Test large size */
+    if (DEBUG) { printf("main: TEST LARGE SIZE\n"); }
+
+    memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
+    if (DEBUG) { printf("main: before set 1 a\n"); }
+    assert(0 == set(kv_ctx, "1", send_buffer));
+    if (DEBUG) { printf("main: before set 333 a\n"); }
+    assert(0 == set(kv_ctx, "333", send_buffer));
+    if (DEBUG) { printf("main: before get 1\n"); }
+    assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
+    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }
+    assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("main: before release\n"); }
+    release(recv_buffer);
 
 //    /* Test throughput */
 //    FILE * results_file;
