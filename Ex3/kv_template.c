@@ -52,6 +52,7 @@
 #define EX3 //todo
 #define DEBUG 0//todo
 /* todo */
+#define MIN_POOL_NODES 10
 #define KILOBIT_IN_BITS 1000
 #define MEGABIT_IN_BITS 1000000
 #define GIGABIT_IN_BITS 1000000000
@@ -65,8 +66,16 @@ struct KV_NODE {
     char key_and_value[0];
 };
 
-struct KV_NODE * head = NULL;
-int num_of_nodes = 0;
+
+
+struct KV_NODE * kv_head = NULL;
+int kv_nodes_counter = 0;
+struct RNDV_NODE * rndv_head = NULL;
+struct RNDV_MEMORY_INFO * rndv_pool_head = NULL;
+struct RNDV_MEMORY_INFO * rndv_pool_tail = NULL;
+int rndv_nodes_counter = 0;
+struct RNDV_CACHE_NODE * cache_node_head = NULL;
+struct RNDV_CACHE_NODE * cache_node_tail = NULL;
 bool close_server = false;
 
 
@@ -83,6 +92,29 @@ char **g_argv;
 #define EAGER_PROTOCOL_LIMIT (1 << 12) /* 4KB limit */
 #define MAX_TEST_SIZE (10 * EAGER_PROTOCOL_LIMIT)
 #define TEST_LOCATION "~/www/"
+
+struct RNDV_MEMORY_INFO {
+    struct ibv_mr * rndv_mr;
+    char rndv_buffer[MAX_TEST_SIZE];
+    struct RNDV_MEMORY_INFO * next;
+};
+
+struct RNDV_NODE {
+    struct RNDV_NODE * next;
+//    struct RNDV_NODE * prev;
+    struct RNDV_MEMORY_DATA * mem_info;
+    unsigned int key_len;
+    char key[0];
+};
+
+struct RNDV_CACHE_NODE {
+    struct RNDV_CACHE_NODE * next;
+    uint64_t srv_addr;
+    unsigned int srv_rkey;
+    unsigned int val_len;
+    unsigned int key_len;
+    char key[0];
+};
 
 enum packet_type {
     EAGER_GET_REQUEST,
@@ -192,11 +224,11 @@ struct pingpong_context {
 	struct ibv_comp_channel *channel;
 	struct ibv_pd		*pd;
 	struct ibv_mr		*mr;
-	struct ibv_mr		*remote_mr;
+//	struct ibv_mr		*remote_mr;
 	struct ibv_cq		*cq;
 	struct ibv_qp		*qp;
 	void			*buf;
-	void            *remote_buf;
+//	void            *remote_buf;
 	int			 size;
 	int			 rx_depth;
     int          routs;
@@ -512,13 +544,38 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 
 	memset(ctx->buf, 0x7b + is_server, size);
 
-    ctx->remote_buf = malloc(roundup(MAX_TEST_SIZE, page_size));
-    if (!ctx->remote_buf) {
-        fprintf(stderr, "Couldn't allocate work buf.\n");
+	// init pool head
+    rndv_pool_head = (struct RNDV_MEMORY_INFO * ) malloc(sizeof(struct RNDV_MEMORY_INFO));
+    memset(rndv_pool_head->rndv_buffer, '\0', MAX_TEST_SIZE);
+    rndv_pool_head->rndv_mr = ibv_reg_mr(ctx->pd, rndv_pool_head->rndv_buffer, MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+    if (!rndv_pool_head->rndv_mr) {
+        fprintf(stderr, "Couldn't register MR\n");
         return NULL;
     }
+    rndv_nodes_counter++;
 
-    memset(ctx->remote_buf, 0x7b + is_server, MAX_TEST_SIZE);
+    struct RNDV_MEMORY_INFO * current_pool_node = rndv_pool_head;
+
+	while (rndv_nodes_counter < MIN_POOL_NODES) {
+	    current_pool_node->next = (struct RNDV_MEMORY_INFO * ) malloc(sizeof(struct RNDV_MEMORY_INFO));
+	    current_pool_node = current_pool_node->next;
+        memset(current_pool_node->rndv_buffer, '\0', MAX_TEST_SIZE);
+        current_pool_node->rndv_mr = ibv_reg_mr(ctx->pd, current_pool_node->rndv_buffer, MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+        if (!current_pool_node->rndv_mr) {
+            fprintf(stderr, "Couldn't register MR\n");
+            return NULL;
+        }
+        rndv_nodes_counter++;
+	}
+	rndv_pool_tail = current_pool_node;
+
+//    ctx->remote_buf = malloc(roundup(MAX_TEST_SIZE, page_size));
+//    if (!ctx->remote_buf) {
+//        fprintf(stderr, "Couldn't allocate work buf.\n");
+//        return NULL;
+//    }
+
+//    memset(ctx->remote_buf, 0x7b + is_server, MAX_TEST_SIZE);
 
 	ctx->context = ibv_open_device(ib_dev);
 	if (!ctx->context) {
@@ -548,11 +605,11 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 		return NULL;
 	}
 
-    ctx->remote_mr = ibv_reg_mr(ctx->pd, ctx->remote_buf, MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
-    if (!ctx->remote_mr) {
-        fprintf(stderr, "Couldn't register MR\n");
-        return NULL;
-    }
+//    ctx->remote_mr = ibv_reg_mr(ctx->pd, ctx->remote_buf, MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+//    if (!ctx->remote_mr) {
+//        fprintf(stderr, "Couldn't register MR\n");
+//        return NULL;
+//    }
 
 	ctx->cq = ibv_create_cq(ctx->context, rx_depth + 1, NULL,
 				ctx->channel, 0);
@@ -620,10 +677,20 @@ int pp_close_ctx(struct pingpong_context *ctx)
 		return 1;
 	}
 
-    if (ibv_dereg_mr(ctx->remote_mr)) {
-        fprintf(stderr, "Couldn't deregister MR\n");
-        return 1;
-    }
+	// dereg mr of structs
+	while (rndv_pool_head != NULL) {
+	    if (ibv_dereg_mr(rndv_pool_head->rndv_mr)) {
+            fprintf(stderr, "Couldn't deregister MR\n");
+            return 1;
+	    }
+	    struct RNDV_MEMORY_INFO * temp = rndv_pool_head->next;
+	    free(rndv_pool_head);
+	    rndv_pool_head = temp;
+	}
+//    if (ibv_dereg_mr(ctx->remote_mr)) {
+//        fprintf(stderr, "Couldn't deregister MR\n");
+//        return 1;
+//    }
 
 	if (ibv_dealloc_pd(ctx->pd)) {
 		fprintf(stderr, "Couldn't deallocate PD\n");
@@ -723,7 +790,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
     unsigned response_size = 0;
 
-    struct KV_NODE * cur_node = head;
+    struct KV_NODE * cur_node = kv_head;
     bool keep_search = true;
     int key_length;
 
@@ -733,7 +800,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
         case EAGER_GET_REQUEST: /* TODO (10LOC): handle a short GET() on the server */
             key_length = strlen(packet->eager_get_request.key);
 
-            if (num_of_nodes == 0) {
+            if (kv_nodes_counter == 0) {
                 struct packet * response_packet = (struct packet*) ctx->buf;
                 response_packet->type = EAGER_GET_RESPONSE;
                 memset(response_packet->eager_get_response.value, '\0', 1);
@@ -772,15 +839,15 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             key_length = strlen(packet->eager_set_request.key_and_value);
             unsigned int vlength = packet->eager_set_request.value_length;
 
-            if (num_of_nodes == 0) {
-                head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
-                head->val_len = vlength;
+            if (kv_nodes_counter == 0) {
+                kv_head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
+                kv_head->val_len = vlength;
 
-                memcpy(head->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
-                memset(&(head->key_and_value[key_length + 1 + vlength]), '\0', 2);
-                head->next = NULL;
-                head->prev = NULL;
-                num_of_nodes++;
+                memcpy(kv_head->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
+                memset(&(kv_head->key_and_value[key_length + 1 + vlength]), '\0', 2);
+                kv_head->next = NULL;
+                kv_head->prev = NULL;
+                kv_nodes_counter++;
                 break;
             }
 
@@ -792,7 +859,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     free(cur_node);
                     cur_node = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
                     memcpy(cur_node->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
-                    memset(&(head->key_and_value[key_length + 1 + vlength]), '\0', 2);
+                    memset(&(kv_head->key_and_value[key_length + 1 + vlength]), '\0', 2);
 
                     if (prev_node != NULL) {
                         prev_node->next = cur_node;
@@ -817,7 +884,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
                     cur_node->next->next = NULL;
                     cur_node->next->prev = cur_node;
-                    num_of_nodes++;
+                    kv_nodes_counter++;
                     break;
                 }
             }
@@ -829,7 +896,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             key_length = strlen(packet->rndv_get_request.key);
 
             // check if key exists
-            if (num_of_nodes == 0) {
+            if (kv_nodes_counter == 0) {
                 struct packet * response_packet = (struct packet*) ctx->buf;
                 response_packet->type = RENDEZVOUS_GET_RESPONSE;
                 memset(response_packet->rndv_get_response.value_empty, '\0', 1);
@@ -876,17 +943,17 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             key_length = strlen(packet->rndv_set_request.key);
             vlength = packet->rndv_set_request.value_length;
             // check if key exists
-            if (num_of_nodes == 0) {
-                head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
-                head->val_len = vlength;
+            if (kv_nodes_counter == 0) {
+                kv_head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
+                kv_head->val_len = vlength;
 
 
-                memcpy(head->key_and_value, packet->rndv_set_request.key, key_length + 1);
-                memset(&(head->key_and_value[key_length]), '\0', 1);
+                memcpy(kv_head->key_and_value, packet->rndv_set_request.key, key_length + 1);
+                memset(&(kv_head->key_and_value[key_length]), '\0', 1);
 
-                head->next = NULL;
-                head->prev = NULL;
-                num_of_nodes++;
+                kv_head->next = NULL;
+                kv_head->prev = NULL;
+                kv_nodes_counter++;
 
                 void * local_ptr = &(head->key_and_value[key_length + 1]);
 //                printf("value len:%d\n", vlength);
@@ -910,7 +977,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     free(cur_node);
                     cur_node = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
                     memcpy(cur_node->key_and_value, packet->rndv_set_request.key, key_length + 1);
-                    memset(&(head->key_and_value[key_length + 1]), '\0', 1);
+                    memset(&(kv_head->key_and_value[key_length + 1]), '\0', 1);
                     if (prev_node != NULL) {
                         prev_node->next = cur_node;
                     }
@@ -938,11 +1005,11 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     cur_node->next->val_len = vlength;
 
                     memcpy(cur_node->next->key_and_value, packet->rndv_set_request.key, key_length + 1);
-                    memset(&(head->key_and_value[key_length + 1]), '\0', 1);
+                    memset(&(kv_head->key_and_value[key_length + 1]), '\0', 1);
 
                     cur_node->next->next = NULL;
                     cur_node->next->prev = cur_node;
-                    num_of_nodes++;
+                    kv_nodes_counter++;
 
                     void * local_ptr = &(cur_node->key_and_value[key_length + 2]);
                     struct packet * response_packet = (struct packet*) ctx->buf;
@@ -1231,6 +1298,17 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters)
 				return 1;
 			}
 		}
+		while (rndv_nodes_counter < MIN_POOL_NODES) {
+            rndv_pool_tail->next = (struct RNDV_MEMORY_INFO * ) malloc(sizeof(struct RNDV_MEMORY_INFO));
+            rndv_pool_tail = rndv_pool_tail->next;
+            memset(rndv_pool_tail->rndv_buffer, '\0', MAX_TEST_SIZE);
+            rndv_pool_tail->rndv_mr = ibv_reg_mr(ctx->pd, rndv_pool_tail->rndv_buffer, MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+            if (!rndv_pool_tail->rndv_mr) {
+                fprintf(stderr, "Couldn't register MR\n");
+                return NULL;
+            }
+            rndv_nodes_counter++;
+        }
 	}
 //    printf("wait: return 0\n");
 	return 0;
@@ -1238,7 +1316,8 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters)
 
 int kv_open(struct kv_server_address *server, void **kv_handle)
 {
-    return orig_main(server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, (struct pingpong_context **)kv_handle);
+//    return orig_main(server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, (struct pingpong_context **)kv_handle);
+    return orig_main(server, MAX_TEST_SIZE, g_argc, g_argv, (struct pingpong_context **)kv_handle);
 }
 
 int kv_set(void *kv_handle, const char *key, const char *value)
@@ -1264,12 +1343,22 @@ int kv_set(void *kv_handle, const char *key, const char *value)
     /* Otherwise, use RENDEZVOUS - exercise part 2 */
     set_packet->type = RENDEZVOUS_SET_REQUEST;
     /* TODO (4LOC): fill in the rest of the set_packet - request peer address & remote key */
-
-    packet_size = strlen(key) + 1 + sizeof(struct packet);
+    struct RNDV_CACHE_NODE * current_cache_node = cache_node_head;
+    while (current_cache_node != NULL) {
+        if (strcmp(current_cache_node->key, key) == 0) {
+            // we can write directly
+            memcpy(ctx->buf, value, strlen(value) + 1);
+            pp_post_send(ctx, IBV_WR_RDMA_WRITE, strlen(value) + 1, NULL, (void *)current_cache_node->srv_addr, current_cache_node->srv_rkey);
+            return pp_wait_completions(ctx, 1);
+        }
+    }
+    // need to get info from server;
+    int key_length = strlen(key);
+    packet_size = key_length + 1 + sizeof(struct packet);
     size_t value_length = strlen(value);
     set_packet->rndv_set_request.value_length = value_length;
-    strncpy(set_packet->rndv_set_request.key, key, strlen(key));
-    memset(&(set_packet->rndv_set_request.key[strlen(key)]), '\0', 1);
+    strncpy(set_packet->rndv_set_request.key, key, key_length);
+    memset(&(set_packet->rndv_set_request.key[key_length]), '\0', 1);
 
     pp_post_recv(ctx, 1); /* Posts a receive-buffer for RENDEZVOUS_SET_RESPONSE */
     pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
@@ -1283,14 +1372,36 @@ int kv_set(void *kv_handle, const char *key, const char *value)
     uint64_t s_ptr = set_packet->rndv_set_response.server_ptr;
     uint32_t s_key = set_packet->rndv_set_response.server_key;
 
+    struct RNDV_CACHE_NODE * temp = (struct RNDV_CACHE_NODE *) malloc(sizeof(struct RNDV_CACHE_NODE) + strlen(key) + 1);
+    temp->next = NULL;
+    temp->srv_addr = set_packet->rndv_set_response.server_ptr;
+    temp->srv_rkey = set_packet->rndv_set_response.server_key;
+    temp->val_len = value_length;
+    temp->key_len = key_length;
+    strncpy(temp->key, key, key_length);
+    memset(&(temp->key[key_length]), '\0', 1);
+    if (cache_node_tail != NULL) {
+        cache_node_tail->next = temp;
+    } else {
+        cache_node_head = temp;
+    }
+    cache_node_tail = temp;
+// todo 17.6
+//    struct RNDV_MEMORY_INFO * temp_memory = rndv_pool_head;
+//    rndv_pool_head = rndv_pool_head->next;
+//    rndv_nodes_counter--;
+//    memcpy(temp_memory->rndv_buffer, value, value_length);
+//    memset(&(temp_memory->rndv_buffer[value_length]), '\0', 1);
+
 //    printf("server key: %u\n", s_key);
 //    printf("server key: %u\n", set_packet->rndv_set_response.server_key);
 //    printf("server key: %lu\n", set_packet->rndv_set_response.server_ptr);
-    memcpy(ctx->remote_buf, value, value_length);
-    memset(&(ctx->remote_buf[value_length]), '\0', 1);
+//    memcpy(ctx->remote_buf, value, value_length);
+//    memset(&(ctx->remote_buf[value_length]), '\0', 1);
 
 //    pp_post_send(ctx, IBV_WR_RDMA_WRITE, packet_size, value, NULL, 0/* TODO (1LOC): replace with remote info for RDMA_WRITE from packet */);
-    pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length, (ctx->remote_buf), (void *)s_ptr, s_key);
+//    pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length, (ctx->remote_buf), (void *)s_ptr, s_key);
+    pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length, NULL, (void *)cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
 //    printf("after  pp_post_send WRITE\n");
     return pp_wait_completions(ctx, 1); /* wait for both to complete */
 }
@@ -1328,6 +1439,22 @@ int kv_get(void *kv_handle, const char *key, char **value)
     /* Otherwise, use RENDEZVOUS - exercise part 2 */
     get_packet->type = RENDEZVOUS_GET_REQUEST;
 
+    //todo delete? 17/6
+//    struct RNDV_MEMORY_INFO * temp_get_memory = rndv_pool_head;
+//    rndv_pool_head = rndv_pool_head->next;
+
+    struct RNDV_CACHE_NODE * current_cache_node = cache_node_head;
+    while (current_cache_node != NULL) {
+        if (strcmp(current_cache_node->key, key) == 0) {
+            // we can read directly
+            pp_post_send(ctx, IBV_WR_RDMA_READ, current_cache_node->val_len + 1, NULL, (void *)current_cache_node->srv_addr, current_cache_node->srv_rkey);
+            pp_wait_completions(ctx, 1);
+            strncpy(ctx->buf, *value, current_cache_node->val_len);
+            return 0;
+        }
+    }
+    // need to get info from server;
+
     packet_size = strlen(key) + sizeof(struct packet);
     strcpy(get_packet->rndv_get_request.key, key);
 
@@ -1337,7 +1464,7 @@ int kv_get(void *kv_handle, const char *key, char **value)
 
 
     assert(get_packet->type == RENDEZVOUS_GET_RESPONSE);
-
+    //todo 17.6
     /* no key on server */
     if (get_packet->rndv_get_response.server_ptr == NULL) {
         *value = "";
@@ -1574,7 +1701,8 @@ void run_server() {
     struct pingpong_context *ctx;
     struct kv_server_address server = {0};
     server.port = 12345;
-    assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
+//    assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
+    assert(0 == orig_main(&server, MAX_TEST_SIZE, g_argc, g_argv, &ctx));
     while (0 <= pp_wait_completions(ctx, 1));
     pp_close_ctx(ctx);
 }
