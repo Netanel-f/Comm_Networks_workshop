@@ -724,6 +724,18 @@ int pp_close_ctx(struct pingpong_context *ctx)
 	    rndv_pool_head = temp;
 	}
 
+	while (rndv_head != NULL) {
+		if (ibv_dereg_mr(rndv_head->mem_info->rndv_mr)) {
+			fprintf(stderr, "Couldn't deregister MR\n");
+			return 1;
+		}
+//		free(rndv_head->mem_info->rndv_buffer);
+//		free(rndv_head->key);
+		struct RNDV_NODE * temp = rndv_head->next;
+		free(rndv_head);
+		rndv_head = temp;
+	}
+
 	if (ctx->remote_buf != NULL) {
         if (ibv_dereg_mr(ctx->remote_mr)) {
             fprintf(stderr, "Couldn't deregister MR\n");
@@ -1545,15 +1557,15 @@ int kv_set(void *kv_handle, const char *key, const char *value)
 
 int kv_get(void *kv_handle, const char *key, char **value)
 {
-//    if (DEBUG) { printf("in kv_get\n"); }
+    if (DEBUG) { printf("in kv_get\n"); }
 	unsigned int key_length = strlen(key);
     struct pingpong_context *ctx = kv_handle;
     struct packet *get_packet = (struct packet*)ctx->buf;
 
     unsigned packet_size = key_length + 1+ sizeof(struct packet);
-//    if (DEBUG) { printf("in kv_get packet_size %d\n", packet_size); }
+    if (DEBUG) { printf("in kv_get packet_size %d\n", packet_size); }
 
-    if (packet_size < (EAGER_PROTOCOL_LIMIT)) {
+    if (packet_size < (EAGER_PROTOCOL_LIMIT)) {//TODO 18.6 fix limit. first search it and then look for size.
         /* Eager protocol - exercise part 1 */
         get_packet->type = EAGER_GET_REQUEST;
         memcpy(get_packet->eager_get_request.key, key, key_length);
@@ -1576,7 +1588,7 @@ int kv_get(void *kv_handle, const char *key, char **value)
 
     /* Otherwise, use RENDEZVOUS - exercise part 2 */
     get_packet->type = RENDEZVOUS_GET_REQUEST;
-
+	printf("kv_get RENDEZVOUS_GET_REQUEST\n");
     //todo delete? 17/6
 //    struct RNDV_MEMORY_INFO * temp_get_memory = rndv_pool_head;
 //    rndv_pool_head = rndv_pool_head->next;
@@ -1604,6 +1616,8 @@ int kv_get(void *kv_handle, const char *key, char **value)
 
 
     assert(get_packet->type == RENDEZVOUS_GET_RESPONSE);
+
+	printf("kv_get RENDEZVOUS_GET_RESPONSE\n");
 
 	struct RNDV_CACHE_NODE * temp = (struct RNDV_CACHE_NODE *) malloc(sizeof(struct RNDV_CACHE_NODE) + strlen(key) + 1);
 	temp->next = NULL;
@@ -1857,10 +1871,12 @@ void run_server() {
     struct pingpong_context *ctx;
     struct kv_server_address server = {0};
     server.port = 12345;
-    printf("before orig_main\n");
+    printf("runsrv - before orig_main\n");
     assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
-	printf("after orig_main\n");
+	printf("runsrv - after orig_main\n");
     while (0 <= pp_wait_completions(ctx, 1));
+
+	printf("runsrv - after wait complete\n");
     pp_close_ctx(ctx);
 }
 
@@ -1926,6 +1942,7 @@ int main(int argc, char **argv)
 //    if (argc > 1) {
     if (argc == 1) {//todo
         run_server();
+		return 0;
     }
 
 #ifdef EX4
@@ -1977,13 +1994,13 @@ int main(int argc, char **argv)
     assert(0 == set(kv_ctx, "1", send_buffer));
     if (DEBUG) { printf("main: before set 333 a\n"); }
     assert(0 == set(kv_ctx, "333", send_buffer));
-//    if (DEBUG) { printf("main: before get 1\n"); }
-//    assert(0 == get(kv_ctx, "1", &recv_buffer));
-//    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
-//    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }
-//    assert(0 == strcmp(send_buffer, recv_buffer));
-//    if (DEBUG) { printf("main: before release\n"); }
-//    release(recv_buffer);
+    if (DEBUG) { printf("main: before get 1\n"); }
+    assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }
+    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }
+    assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("main: before release\n"); }
+    release(recv_buffer);
 
 //    /* Test throughput */
 //    FILE * results_file;
