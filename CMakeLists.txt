@@ -29,7 +29,7 @@ set(CMAKE_CXX_FLAGS -Wall -libverbs -D _GNU_SOURCE)
 set(EX2_IB Ex2/ib_perf.c)
 add_executable(ex2ib ${EX2_IB})
 
-include_directories(/Users/netanel/Downloads/libibverbs-1.2.1/include)
+#include_directories(/Users/netanel/Downloads/libibverbs-1.2.1/include)
 
 set(EX3_SRC Ex3/kv_template.c)
 add_executable(ex3 ${EX3_SRC})
