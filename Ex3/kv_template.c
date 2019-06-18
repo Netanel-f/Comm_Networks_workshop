@@ -1558,8 +1558,26 @@ int kv_set(void *kv_handle, const char *key, const char *value)
 int kv_get(void *kv_handle, const char *key, char **value)
 {
     if (DEBUG) { printf("in kv_get\n"); }
-	unsigned int key_length = strlen(key);
     struct pingpong_context *ctx = kv_handle;
+    /* check if key is cached 0 so its actually a big value*/
+    struct RNDV_CACHE_NODE * temp_cache_node = cache_node_head;
+    while (temp_cache_node != NULL) {
+        if (strcmp(key, temp_cache_node->key) == 0) {
+            // get results from server
+            pp_post_send(ctx, IBV_WR_RDMA_READ, temp_cache_node->val_len, ctx->remote_buf,
+                         (void *) temp_cache_node->srv_addr, temp_cache_node->srv_rkey);
+            pp_wait_completions(ctx, 1);
+            *value = (char *) malloc(temp_cache_node->val_len + 1);
+            strncpy(*value, ctx->remote_buf, temp_cache_node->val_len);
+            return 1;
+
+        }
+
+        temp_cache_node = temp_cache_node->next;
+    }
+
+	unsigned int key_length = strlen(key);
+
     struct packet *get_packet = (struct packet*)ctx->buf;
 
     unsigned packet_size = key_length + 1+ sizeof(struct packet);
@@ -1647,10 +1665,10 @@ int kv_get(void *kv_handle, const char *key, char **value)
 
 
 //    pp_post_send(ctx, IBV_WR_RDMA_READ, packet_size, *value, cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
-    pp_post_recv(ctx, 1);
+//    pp_post_recv(ctx, 1);
     pp_post_send(ctx, IBV_WR_RDMA_READ, value_length, ctx->remote_buf, (void*)cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
-//    return pp_wait_completions(ctx, 1); /* wait for both to complete */
-    pp_wait_completions(ctx, 2); /* wait for both to complete */
+    return pp_wait_completions(ctx, 1); /* wait for both to complete */
+//    pp_wait_completions(ctx, 2); /* wait for both to complete */
     strcpy(*value, ctx->remote_buf);
     return 0;
 }
