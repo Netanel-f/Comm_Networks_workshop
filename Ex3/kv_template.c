@@ -71,6 +71,7 @@ struct KV_NODE {
 struct KV_NODE * kv_head = NULL;
 int kv_nodes_counter = 0;
 struct RNDV_NODE * rndv_head = NULL;
+struct RNDV_NODE * rndv_tail = NULL;
 struct RNDV_MEMORY_INFO * rndv_pool_head = NULL;
 struct RNDV_MEMORY_INFO * rndv_pool_tail = NULL;
 int rndv_nodes_counter = 0;
@@ -102,7 +103,7 @@ struct RNDV_MEMORY_INFO {
 struct RNDV_NODE {
     struct RNDV_NODE * next;
 //    struct RNDV_NODE * prev;
-    struct RNDV_MEMORY_DATA * mem_info;
+    struct RNDV_MEMORY_INFO * mem_info;
     unsigned int key_len;
     char key[0];
 };
@@ -165,20 +166,22 @@ struct packet {
         /* RENDEZVOUS PROTOCOL PACKETS */
         struct {
             /* TODO */
+            unsigned int key_len;
             char key[0];
         } rndv_get_request;
 
         struct {
             /* TODO */
             unsigned int value_length;
-            char value_empty[1];
-            void * server_ptr;
+//            char value_empty[1];
+            uint64_t server_ptr;
             uint32_t server_key;
         } rndv_get_response;
 
         struct {
             /* TODO */
-            unsigned int value_length;
+//            unsigned int val_len;
+            unsigned int key_len;
             char key[0];
         } rndv_set_request;
 
@@ -527,6 +530,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 					    int use_event, int is_server)
 {
 	struct pingpong_context *ctx;
+	printf("initctx\n");
 
 	ctx = calloc(1, sizeof *ctx);
 	if (!ctx)
@@ -545,14 +549,19 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 	memset(ctx->buf, 0x7b + is_server, size);
 
 	// init pool head
+	printf("init pool head\n");
     rndv_pool_head = (struct RNDV_MEMORY_INFO * ) malloc(sizeof(struct RNDV_MEMORY_INFO));
-    memset(rndv_pool_head->rndv_buffer, '\0', MAX_TEST_SIZE);
-    rndv_pool_head->rndv_mr = ibv_reg_mr(ctx->pd, rndv_pool_head->rndv_buffer, MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+	rndv_pool_head->next = NULL;
+	printf("init pool head buffer\n");
+	memset(rndv_pool_head->rndv_buffer, '\0', MAX_TEST_SIZE);
+	printf("init pool head mr\n");
+	rndv_pool_head->rndv_mr = ibv_reg_mr(ctx->pd, &(rndv_pool_head->rndv_buffer), MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
     if (!rndv_pool_head->rndv_mr) {
         fprintf(stderr, "Couldn't register MR\n");
         return NULL;
     }
     rndv_nodes_counter++;
+	printf("after pool head\n");
 
     struct RNDV_MEMORY_INFO * current_pool_node = rndv_pool_head;
 
@@ -893,142 +902,207 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
         case RENDEZVOUS_GET_REQUEST: /* TODO (10LOC): handle a long GET() on the server */
 //            printf("handle server RENDEZVOUS_GET_REQUEST\n");
 //            printf("handle server key: %s\n", packet->rndv_set_request.key);
-            key_length = strlen(packet->rndv_get_request.key);
 
-            // check if key exists
-            if (kv_nodes_counter == 0) {
-                struct packet * response_packet = (struct packet*) ctx->buf;
-                response_packet->type = RENDEZVOUS_GET_RESPONSE;
-                memset(response_packet->rndv_get_response.value_empty, '\0', 1);
-                response_packet->rndv_get_response.value_length = 1;
-                response_packet->rndv_get_response.server_ptr = NULL;
-                response_packet->rndv_get_response.server_key = 0;
-                response_size = sizeof(response_packet);
-                break;
-            }
+			key_length = packet->rndv_get_request.key_len;
+//todo 18.6
+//            /* a get request will received only if client doesnt have it cached for remote access */
+//            struct RNDV_NODE * current_node = rndv_head;
+//            while (current_node != NULL) {
+//            	if ((strncmp(current_node->key, packet->rndv_get_request.key, key_length) == 0)) {
+//					/* found match */
+//					struct packet *response_packet = ctx->buf;
+//					response_packet->type = RENDEZVOUS_GET_RESPONSE;
+//					response_packet->rndv_get_response.server_ptr = (uint64_t) current_node->mem_info->rndv_mr->addr;
+//					response_packet->rndv_get_response.server_key = ctx->mr->lkey;
+//					response_size = sizeof(struct packet);
+//					break;
+//            	}
+//            }
 
-            while (keep_search) {
-                if (strcmp(packet->eager_get_request.key, cur_node->key_and_value) == 0) {
-                    /* found match */
-                    struct packet *response_packet = ctx->buf;
-                    response_packet->type = RENDEZVOUS_GET_RESPONSE;
-                    unsigned int val_len = cur_node->val_len;
-                    response_packet->eager_get_response.value_length = val_len;
-                    response_packet->rndv_get_response.server_ptr = &(cur_node->key_and_value[key_length + 1]);
-                    response_packet->rndv_get_response.server_key = ctx->mr->lkey;
-                    response_size = sizeof(struct packet);
-                    break;
+            /* couldn't find existing key  - create a (empty) node for it */
 
-                } else if (cur_node->next != NULL) {
-                    /* no match, yet */
-                    cur_node = cur_node->next;
+			struct RNDV_NODE * rndv_tempGET = (struct RNDV_NODE *) malloc(sizeof(struct RNDV_NODE) + key_length + 1);
+			rndv_tempGET->next = NULL;
+			rndv_tempGET->mem_info = rndv_pool_head;
+			rndv_pool_head = rndv_pool_head->next;
+			rndv_tempGET->mem_info->next = NULL;
+			strncpy(rndv_tempGET->mem_info->rndv_buffer, packet->rndv_get_request.key, key_length);
+			if (rndv_tail != NULL) {
+				rndv_tail->next = rndv_tempGET;
+				rndv_tail = rndv_tempGET;
+			} else {
+				rndv_head = rndv_tempGET;
+				rndv_tail = rndv_tempGET;
+			}
 
-                } else {
-                    /* key is not exists on server, respond "" */
-                    struct packet * response_packet = (struct packet*) ctx->buf;
-                    response_packet->type = RENDEZVOUS_GET_RESPONSE;
-                    memset(response_packet->rndv_get_response.value_empty, '\0', 1);
-                    response_packet->rndv_get_response.value_length = 1;
-                    response_packet->rndv_get_response.server_ptr = NULL;
-                    response_packet->rndv_get_response.server_key = 0;
-                    response_size = sizeof(response_packet);
-                    break;
-                }
-            }
+			struct packet * response_packetGET = (struct packet*) ctx->buf;
+			response_packetGET->type = RENDEZVOUS_GET_RESPONSE;
+			response_packetGET->rndv_get_response.value_length = 1;
+			response_packetGET->rndv_get_response.server_ptr = (uint64_t) rndv_tail->mem_info->rndv_mr->addr;
+			response_packetGET->rndv_get_response.server_key = rndv_tail->mem_info->rndv_mr->rkey;
+
+
+//			// check if key exists
+//            if (kv_nodes_counter == 0) {
+//                struct packet * response_packet = (struct packet*) ctx->buf;
+//                response_packet->type = RENDEZVOUS_GET_RESPONSE;
+//                memset(response_packet->rndv_get_response.value_empty, '\0', 1);
+//                response_packet->rndv_get_response.value_length = 1;
+//                response_packet->rndv_get_response.server_ptr = NULL;
+//                response_packet->rndv_get_response.server_key = 0;
+//                response_size = sizeof(response_packet);
+//                break;
+//            }
+//
+//            while (keep_search) {
+//                if (strcmp(packet->eager_get_request.key, cur_node->key_and_value) == 0) {
+//                    /* found match */
+//                    struct packet *response_packet = ctx->buf;
+//                    response_packet->type = RENDEZVOUS_GET_RESPONSE;
+//                    unsigned int val_len = cur_node->val_len;
+//                    response_packet->eager_get_response.value_length = val_len;
+//                    response_packet->rndv_get_response.server_ptr = &(cur_node->key_and_value[key_length + 1]);
+//                    response_packet->rndv_get_response.server_key = ctx->mr->lkey;
+//                    response_size = sizeof(struct packet);
+//                    break;
+//
+//                } else if (cur_node->next != NULL) {
+//                    /* no match, yet */
+//                    cur_node = cur_node->next;
+//
+//                } else {
+//                    /* key is not exists on server, respond "" */
+//                    struct packet * response_packet = (struct packet*) ctx->buf;
+//                    response_packet->type = RENDEZVOUS_GET_RESPONSE;
+//                    memset(response_packet->rndv_get_response.value_empty, '\0', 1);
+//                    response_packet->rndv_get_response.value_length = 1;
+//                    response_packet->rndv_get_response.server_ptr = NULL;
+//                    response_packet->rndv_get_response.server_key = 0;
+//                    response_size = sizeof(response_packet);
+//                    break;
+//                }
+//            }
             break;
 
         case RENDEZVOUS_SET_REQUEST: /* TODO (20LOC): handle a long SET() on the server */
 //            printf("handle server RENDEZVOUS_SET_REQUEST\n");
 //            printf("handle server key: %s\n", packet->rndv_set_request.key);
-            key_length = strlen(packet->rndv_set_request.key);
-            vlength = packet->rndv_set_request.value_length;
-            // check if key exists
-            if (kv_nodes_counter == 0) {
-                kv_head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
-                kv_head->val_len = vlength;
+            key_length = packet->rndv_set_request.key_len;
+//            vlength = packet->rndv_set_request.value_length;
+
+            // RENDEZVOUS_SET_REQUEST in case client does NOT have the remote details.
+            // add a rndv node to store value
+
+			struct RNDV_NODE * rndv_temp = (struct RNDV_NODE *) malloc(sizeof(struct RNDV_NODE) + key_length + 1);
+			rndv_temp->next = NULL;
+			rndv_temp->mem_info = rndv_pool_head;
+			rndv_pool_head = rndv_pool_head->next;
+			rndv_temp->mem_info->next = NULL;
+			strncpy(rndv_temp->mem_info->rndv_buffer, packet->rndv_set_request.key, key_length);
+			if (rndv_tail != NULL) {
+				rndv_tail->next = rndv_temp;
+				rndv_tail = rndv_temp;
+            } else {
+				rndv_head = rndv_temp;
+				rndv_tail = rndv_temp;
+			}
+
+			struct packet * response_packet = (struct packet*) ctx->buf;
+			response_packet->type = RENDEZVOUS_SET_RESPONSE;
+			response_packet->rndv_set_response.server_ptr = (uint64_t) rndv_tail->mem_info->rndv_mr->addr;
+			response_packet->rndv_set_response.server_key = rndv_tail->mem_info->rndv_mr->rkey;
 
 
-                memcpy(kv_head->key_and_value, packet->rndv_set_request.key, key_length + 1);
-                memset(&(kv_head->key_and_value[key_length]), '\0', 1);
-
-                kv_head->next = NULL;
-                kv_head->prev = NULL;
-                kv_nodes_counter++;
-
-                void * local_ptr = &(head->key_and_value[key_length + 1]);
-//                printf("value len:%d\n", vlength);
-
-                struct packet * response_packet = (struct packet*) ctx->buf;
-                response_packet->type = RENDEZVOUS_SET_RESPONSE;
-                response_packet->rndv_set_response.server_ptr = (uint64_t) ctx->remote_mr->addr;
-                response_packet->rndv_set_response.server_key = ctx->remote_mr->rkey;
-
-//                printf("server key: %u\n", response_packet->rndv_set_response.server_key);
-//                printf("server ptr: %lu\n", response_packet->rndv_set_response.server_ptr);
-                response_size = sizeof(response_packet) + sizeof(uint64_t) + sizeof(unsigned int);
-                break;
-            }
-
-            while (keep_search) {
-                if (strcmp(cur_node->key_and_value, packet->rndv_set_request.key) == 0) {
-                    /* found match */
-                    struct KV_NODE * prev_node = cur_node->prev;
-                    struct KV_NODE * next_node = cur_node->next;
-                    free(cur_node);
-                    cur_node = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
-                    memcpy(cur_node->key_and_value, packet->rndv_set_request.key, key_length + 1);
-                    memset(&(kv_head->key_and_value[key_length + 1]), '\0', 1);
-                    if (prev_node != NULL) {
-                        prev_node->next = cur_node;
-                    }
-                    cur_node->prev = prev_node;
-                    cur_node->next = next_node;
-                    if (next_node != NULL) {
-                        next_node->prev = cur_node;
-                    }
-                    cur_node->val_len = vlength;
-                    void * local_ptr = &(cur_node->key_and_value[key_length + 2]);
-                    struct packet * response_packet = (struct packet*) ctx->buf;
-
-                    response_packet->type = RENDEZVOUS_SET_RESPONSE;
-                    response_packet->rndv_set_response.server_ptr = (uint64_t) ctx->remote_mr->addr;
-                    response_packet->rndv_set_response.server_key = ctx->remote_mr->lkey;
-                    response_size = sizeof(response_packet);
-                    break;
-
-                } else if (cur_node->next != NULL) {
-                    /* no match, yet */
-                    cur_node = cur_node->next;
-                } else {
-                    /* key is not exists on server, appending it */
-                    cur_node->next = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
-                    cur_node->next->val_len = vlength;
-
-                    memcpy(cur_node->next->key_and_value, packet->rndv_set_request.key, key_length + 1);
-                    memset(&(kv_head->key_and_value[key_length + 1]), '\0', 1);
-
-                    cur_node->next->next = NULL;
-                    cur_node->next->prev = cur_node;
-                    kv_nodes_counter++;
-
-                    void * local_ptr = &(cur_node->key_and_value[key_length + 2]);
-                    struct packet * response_packet = (struct packet*) ctx->buf;
-                    response_packet->type = RENDEZVOUS_SET_RESPONSE;
-//                    response_packet->rndv_set_response.server_ptr = local_ptr;
-//                    response_packet->rndv_set_response.server_key = ctx->mr->lkey;
-                    response_size = sizeof(response_packet);
-
-                    break;
-                }
-            }
+//            // check if key exists
+//            if (kv_nodes_counter == 0) {
+//                kv_head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
+//                kv_head->val_len = vlength;
+//
+//
+//                memcpy(kv_head->key_and_value, packet->rndv_set_request.key, key_length + 1);
+//                memset(&(kv_head->key_and_value[key_length]), '\0', 1);
+//
+//                kv_head->next = NULL;
+//                kv_head->prev = NULL;
+//                kv_nodes_counter++;
+//
+//                void * local_ptr = &(head->key_and_value[key_length + 1]);
+////                printf("value len:%d\n", vlength);
+//
+//                struct packet * response_packet = (struct packet*) ctx->buf;
+//                response_packet->type = RENDEZVOUS_SET_RESPONSE;
+//                response_packet->rndv_set_response.server_ptr = (uint64_t) ctx->remote_mr->addr;
+//                response_packet->rndv_set_response.server_key = ctx->remote_mr->rkey;
+//
+////                printf("server key: %u\n", response_packet->rndv_set_response.server_key);
+////                printf("server ptr: %lu\n", response_packet->rndv_set_response.server_ptr);
+//                response_size = sizeof(response_packet) + sizeof(uint64_t) + sizeof(unsigned int);
+//                break;
+//            }
+//
+//            while (keep_search) {
+//                if (strcmp(cur_node->key_and_value, packet->rndv_set_request.key) == 0) {
+//                    /* found match */
+//                    struct KV_NODE * prev_node = cur_node->prev;
+//                    struct KV_NODE * next_node = cur_node->next;
+//                    free(cur_node);
+//                    cur_node = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
+//                    memcpy(cur_node->key_and_value, packet->rndv_set_request.key, key_length + 1);
+//                    memset(&(kv_head->key_and_value[key_length + 1]), '\0', 1);
+//                    if (prev_node != NULL) {
+//                        prev_node->next = cur_node;
+//                    }
+//                    cur_node->prev = prev_node;
+//                    cur_node->next = next_node;
+//                    if (next_node != NULL) {
+//                        next_node->prev = cur_node;
+//                    }
+//                    cur_node->val_len = vlength;
+//                    void * local_ptr = &(cur_node->key_and_value[key_length + 2]);
+//                    struct packet * response_packet = (struct packet*) ctx->buf;
+//
+//                    response_packet->type = RENDEZVOUS_SET_RESPONSE;
+//                    response_packet->rndv_set_response.server_ptr = (uint64_t) ctx->remote_mr->addr;
+//                    response_packet->rndv_set_response.server_key = ctx->remote_mr->lkey;
+//                    response_size = sizeof(response_packet);
+//                    break;
+//
+//                } else if (cur_node->next != NULL) {
+//                    /* no match, yet */
+//                    cur_node = cur_node->next;
+//                } else {
+//                    /* key is not exists on server, appending it */
+//                    cur_node->next = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
+//                    cur_node->next->val_len = vlength;
+//
+//                    memcpy(cur_node->next->key_and_value, packet->rndv_set_request.key, key_length + 1);
+//                    memset(&(kv_head->key_and_value[key_length + 1]), '\0', 1);
+//
+//                    cur_node->next->next = NULL;
+//                    cur_node->next->prev = cur_node;
+//                    kv_nodes_counter++;
+//
+//                    void * local_ptr = &(cur_node->key_and_value[key_length + 2]);
+//                    struct packet * response_packet = (struct packet*) ctx->buf;
+//                    response_packet->type = RENDEZVOUS_SET_RESPONSE;
+////                    response_packet->rndv_set_response.server_ptr = local_ptr;
+////                    response_packet->rndv_set_response.server_key = ctx->mr->lkey;
+//                    response_size = sizeof(response_packet);
+//
+//                    break;
+//                }
+//            }
             break;
 
         case EAGER_GET_RESPONSE:
 //            if (DEBUG) { printf("wait: EAGER GET RESP\n"); }
             return;
         case RENDEZVOUS_SET_RESPONSE:
-//            printf("RENDEZVOUS_SET_RESPONSE\n");
+            printf("RENDEZVOUS_SET_RESPONSE\n");
             break;
+		case RENDEZVOUS_GET_RESPONSE:
+			printf("RENDEZVOUS_GET_RESPONSE\n");
+			break;
         case CLOSE_CONNECTION:
             close_server = true;
             break;
@@ -1036,11 +1110,11 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
         case FIND: /* TODO (2LOC): use some hash function */
     #endif
         default:
-//            printf("handle server default\n");
+            printf("handle server default\n");
             break;
     }
 
-//    printf("in handle_server response_size %d\n", response_size);
+    printf("in handle_server response_size %d\n", response_size);
 	if (response_size) {
 		pp_post_send(ctx, IBV_WR_SEND, response_size, NULL, NULL, 0);
 	}
@@ -1250,7 +1324,7 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 
 int pp_wait_completions(struct pingpong_context *ctx, int iters)
 {
-//    if (DEBUG) { printf("wait complete\n"); }
+    if (DEBUG) { printf("wait complete\n"); }
 
     int rcnt, scnt, num_cq_events, use_event = 0;
 	rcnt = scnt = 0;
@@ -1316,8 +1390,8 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters)
 
 int kv_open(struct kv_server_address *server, void **kv_handle)
 {
-//    return orig_main(server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, (struct pingpong_context **)kv_handle);
-    return orig_main(server, MAX_TEST_SIZE, g_argc, g_argv, (struct pingpong_context **)kv_handle);
+    return orig_main(server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, (struct pingpong_context **)kv_handle);
+//    return orig_main(server, MAX_TEST_SIZE, g_argc, g_argv, (struct pingpong_context **)kv_handle);
 }
 
 int kv_set(void *kv_handle, const char *key, const char *value)
@@ -1352,11 +1426,12 @@ int kv_set(void *kv_handle, const char *key, const char *value)
             return pp_wait_completions(ctx, 1);
         }
     }
-    // need to get info from server;
-    int key_length = strlen(key);
+    // need to get  remote access info from server;
+    unsigned int key_length = strlen(key);
     packet_size = key_length + 1 + sizeof(struct packet);
     size_t value_length = strlen(value);
-    set_packet->rndv_set_request.value_length = value_length;
+//    set_packet->rndv_set_request.val_len = strlen(value) + 1;
+    set_packet->rndv_set_request.key_len = key_length;
     strncpy(set_packet->rndv_set_request.key, key, key_length);
     memset(&(set_packet->rndv_set_request.key[key_length]), '\0', 1);
 
@@ -1367,10 +1442,9 @@ int kv_set(void *kv_handle, const char *key, const char *value)
 
     assert(set_packet->type == RENDEZVOUS_SET_RESPONSE);
 
-    ctx = kv_handle;
     set_packet = (struct packet*)ctx->buf;
-    uint64_t s_ptr = set_packet->rndv_set_response.server_ptr;
-    uint32_t s_key = set_packet->rndv_set_response.server_key;
+//    uint64_t s_ptr = set_packet->rndv_set_response.server_ptr;
+//    uint32_t s_key = set_packet->rndv_set_response.server_key;
 
     struct RNDV_CACHE_NODE * temp = (struct RNDV_CACHE_NODE *) malloc(sizeof(struct RNDV_CACHE_NODE) + strlen(key) + 1);
     temp->next = NULL;
@@ -1409,17 +1483,18 @@ int kv_set(void *kv_handle, const char *key, const char *value)
 int kv_get(void *kv_handle, const char *key, char **value)
 {
 //    if (DEBUG) { printf("in kv_get\n"); }
+	unsigned int key_length = strlen(key);
     struct pingpong_context *ctx = kv_handle;
     struct packet *get_packet = (struct packet*)ctx->buf;
 
-    unsigned packet_size = strlen(key) + sizeof(struct packet);
+    unsigned packet_size = key_length + 1+ sizeof(struct packet);
 //    if (DEBUG) { printf("in kv_get packet_size %d\n", packet_size); }
 
     if (packet_size < (EAGER_PROTOCOL_LIMIT)) {
         /* Eager protocol - exercise part 1 */
         get_packet->type = EAGER_GET_REQUEST;
-        memcpy(get_packet->eager_get_request.key, key, strlen(key));
-        memset(&(get_packet->eager_get_request.key[strlen(key)]), '\0', 1);
+        memcpy(get_packet->eager_get_request.key, key, key_length);
+        memset(&(get_packet->eager_get_request.key[key_length]), '\0', 1);
 
         pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
 
@@ -1455,8 +1530,8 @@ int kv_get(void *kv_handle, const char *key, char **value)
     }
     // need to get info from server;
 
-    packet_size = strlen(key) + sizeof(struct packet);
-    strcpy(get_packet->rndv_get_request.key, key);
+    packet_size = sizeof(struct packet) + key_length + 1;
+    strncpy(get_packet->rndv_get_request.key, key, key_length+1);
 
     pp_post_recv(ctx, 1); /* Posts a receive-buffer for RENDEZVOUS_GET_RESPONSE */
     pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
@@ -1464,23 +1539,34 @@ int kv_get(void *kv_handle, const char *key, char **value)
 
 
     assert(get_packet->type == RENDEZVOUS_GET_RESPONSE);
+
+	struct RNDV_CACHE_NODE * temp = (struct RNDV_CACHE_NODE *) malloc(sizeof(struct RNDV_CACHE_NODE) + strlen(key) + 1);
+	temp->next = NULL;
+	temp->srv_addr = get_packet->rndv_get_response.server_ptr;
+	temp->srv_rkey = get_packet->rndv_get_response.server_key;
+    temp->val_len = get_packet->rndv_get_response.value_length;
+	temp->key_len = key_length;
+	strncpy(temp->key, key, key_length);
+	memset(&(temp->key[key_length]), '\0', 1);
+	if (cache_node_tail != NULL) {
+		cache_node_tail->next = temp;
+	} else {
+		cache_node_head = temp;
+	}
+	cache_node_tail = temp;
+
     //todo 17.6
-    /* no key on server */
-    if (get_packet->rndv_get_response.server_ptr == NULL) {
-        *value = "";
-        return 0;
-    }
-
-
+//	/* no key on server */
+//    if (get_packet->rndv_get_response.server_ptr == NULL) {
+//        *value = "";
+//        return 0;
+//    }
 
 
     unsigned int value_length = get_packet->rndv_get_response.value_length;
     *value = (char *) malloc(value_length + 1);
-    packet_size = sizeof(struct packet);
-    void * server_ptr = get_packet->rndv_get_response.server_ptr;
-    uint32_t server_key = get_packet->rndv_get_response.server_key;
 
-    pp_post_send(ctx, IBV_WR_RDMA_READ, packet_size, *value, server_ptr, server_key);
+    pp_post_send(ctx, IBV_WR_RDMA_READ, packet_size, *value, cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
     return pp_wait_completions(ctx, 1); /* wait for both to complete */
 
 //    return 0;
@@ -1489,6 +1575,7 @@ int kv_get(void *kv_handle, const char *key, char **value)
 void kv_release(char *value)
 {
     free(value);
+    //todo maybe need to delete from cache?
     /* TODO (2LOC): free value */
 }
 
@@ -1701,8 +1788,10 @@ void run_server() {
     struct pingpong_context *ctx;
     struct kv_server_address server = {0};
     server.port = 12345;
-//    assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
-    assert(0 == orig_main(&server, MAX_TEST_SIZE, g_argc, g_argv, &ctx));
+    printf("before orig_main\n");
+    assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
+	printf("after orig_main\n");
+//    assert(0 == orig_main(&server, MAX_TEST_SIZE, g_argc, g_argv, &ctx));//todo
     while (0 <= pp_wait_completions(ctx, 1));
     pp_close_ctx(ctx);
 }
