@@ -102,7 +102,7 @@ struct RNDV_NODE * rndv_head = NULL;
 struct RNDV_NODE * rndv_tail = NULL;
 struct RNDV_MEMORY_INFO * rndv_pool_head = NULL;
 struct RNDV_MEMORY_INFO * rndv_pool_tail = NULL;
-int rndv_nodes_counter = 0;
+int rndv_pool_nodes_counter = 0;
 
 /* client cache */
 struct RNDV_CACHE_NODE * cache_node_head = NULL;
@@ -185,8 +185,6 @@ struct packet {
             uint64_t server_ptr;
             unsigned int server_key;
         } rndv_set_response;
-
-		/* TODO - maybe there are more packet types? */
 
 		struct {
 		    unsigned int to_close;
@@ -600,12 +598,12 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
             fprintf(stderr, "Couldn't register MR\n");
             return NULL;
         }
-        rndv_nodes_counter++;
+        rndv_pool_nodes_counter++;
 //        printf("after pool head\n");//todo
 
         struct RNDV_MEMORY_INFO *current_pool_node = rndv_pool_head;
 
-        while (rndv_nodes_counter < MIN_POOL_NODES) {
+        while (rndv_pool_nodes_counter < MIN_POOL_NODES) {
             current_pool_node->next = (struct RNDV_MEMORY_INFO *) malloc(
                     sizeof(struct RNDV_MEMORY_INFO));
             current_pool_node = current_pool_node->next;
@@ -618,7 +616,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
                 fprintf(stderr, "Couldn't register MR\n");
                 return NULL;
             }
-            rndv_nodes_counter++;
+            rndv_pool_nodes_counter++;
         }
         rndv_pool_tail = current_pool_node;
     }
@@ -931,7 +929,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 			rndv_tempGET->next = NULL;
 			rndv_tempGET->mem_info = rndv_pool_head;
 			rndv_pool_head = rndv_pool_head->next;
-            rndv_nodes_counter--;
+            rndv_pool_nodes_counter--;
 			rndv_tempGET->mem_info->next = NULL;
             rndv_tempGET->key_len = key_length;
 			strncpy(rndv_tempGET->key, packet->rndv_get_request.key, key_length);
@@ -960,7 +958,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 			rndv_temp->next = NULL;
 			rndv_temp->mem_info = rndv_pool_head;
 			rndv_pool_head = rndv_pool_head->next;
-			rndv_nodes_counter--;
+			rndv_pool_nodes_counter--;
 			rndv_temp->mem_info->next = NULL;
 			strncpy(rndv_temp->mem_info->rndv_buffer, packet->rndv_set_request.key, key_length);
 			if (rndv_tail != NULL) {
@@ -1238,7 +1236,7 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters) {
 			}
 		}
 		if (ctx->server) {
-            while (rndv_nodes_counter < MIN_POOL_NODES) {
+            while (rndv_pool_nodes_counter < MIN_POOL_NODES) {
                 rndv_pool_tail->next = (struct RNDV_MEMORY_INFO *) malloc(
                         sizeof(struct RNDV_MEMORY_INFO));
                 rndv_pool_tail = rndv_pool_tail->next;
@@ -1252,7 +1250,7 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters) {
                     fprintf(stderr, "Couldn't register MR\n");
                     return 1;
                 }
-                rndv_nodes_counter++;
+                rndv_pool_nodes_counter++;
             }
         }
 	}
