@@ -840,7 +840,6 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     unsigned response_size = 0;
 
     struct KV_NODE * cur_node = kv_head;
-    bool keep_search = true;
     int key_length;
 
     switch (packet->type) {
@@ -1331,7 +1330,6 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     memcpy(ctx->remote_buf, value, value_length);
     memset(&(ctx->remote_buf[value_length]), '\0', 1);
 
-//    pp_post_send(ctx, IBV_WR_RDMA_WRITE, packet_size, value, NULL, 0/* TODO (1LOC): replace with remote info for RDMA_WRITE from packet */);
     pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length, ctx->remote_buf, (void *)cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
     return pp_wait_completions(ctx, 1); /* wait for both to complete */
 }
@@ -1428,7 +1426,7 @@ int kv_get(void *kv_handle, const char *key, char **value) {
 
     pp_post_send(ctx, IBV_WR_RDMA_READ, value_length, ctx->remote_buf, (void*)cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
     return pp_wait_completions(ctx, 1); /* wait for both to complete */
-    strcpy(*value, ctx->remote_buf);//todo check
+    strcpy(*value, ctx->remote_buf);
     return 0;
 }
 
@@ -1640,6 +1638,7 @@ void run_server() {
     pp_close_ctx(ctx);
 }
 
+
 void print_results_to_file(FILE * results_file, ssize_t value_size, double throughput) {
     char * value_size_unit;
     char * rate_unit;
@@ -1675,6 +1674,7 @@ void print_results_to_file(FILE * results_file, ssize_t value_size, double throu
     fprintf(results_file, "Value size: %ld\t%s,\tThroughput: %.3f\t%s\n",
             value_size, value_size_unit, throughput, rate_unit);
 }
+
 
 int main(int argc, char **argv)
 {
