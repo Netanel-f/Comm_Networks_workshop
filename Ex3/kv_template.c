@@ -108,6 +108,7 @@ int rndv_pool_nodes_counter = 0;
 struct RNDV_CACHE_NODE * cache_node_head = NULL;
 struct RNDV_CACHE_NODE * cache_node_tail = NULL;
 bool close_server = false;
+bool use_rndv_protocol = false;
 
 
 #ifdef EX4
@@ -838,10 +839,11 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     switch (packet->type) {
 
         /* Only handle packets relevant to the server here - client will handle inside get/set() calls */
-        case EAGER_GET_REQUEST: /* TODO (10LOC): handle a short GET() on the server */
+        case EAGER_GET_REQUEST:
             key_length = strlen(packet->eager_get_request.key);
 
             while (cur_node != NULL) {
+                printf("cur_node key %s\n", cur_node->key_and_value);//todo
                 if (strcmp(packet->eager_get_request.key, cur_node->key_and_value) == 0) {
                     /* found match */
                     struct packet *response_packet = ctx->buf;
@@ -868,7 +870,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             }
             break;
 
-        case EAGER_SET_REQUEST: /* TODO (10LOC): handle a short SET() on the server */
+        case EAGER_SET_REQUEST:
             key_length = strlen(packet->eager_set_request.key_and_value);
             unsigned int vlength = packet->eager_set_request.value_length;
 
@@ -908,13 +910,14 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     kv_tail = temp_node;
                 } else {
                     temp_node->prev = kv_tail;
+                    kv_tail->next = temp_node;
                     kv_tail = temp_node;
                 }
                 kv_nodes_counter++;
             }
             break;
 
-        case RENDEZVOUS_GET_REQUEST: /* TODO (10LOC): handle a long GET() on the server */
+        case RENDEZVOUS_GET_REQUEST:
 
 			key_length = packet->rndv_get_request.key_len;
 
@@ -943,7 +946,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 			response_packetGET->rndv_get_response.server_key = rndv_tail->mem_info->rndv_mr->rkey;
             break;
 
-        case RENDEZVOUS_SET_REQUEST: /* TODO (20LOC): handle a long SET() on the server */
+        case RENDEZVOUS_SET_REQUEST:
             key_length = packet->rndv_set_request.key_len;
 
             /* RENDEZVOUS_SET_REQUEST in case client does NOT have the remote details.
@@ -1265,10 +1268,9 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
 
     unsigned packet_size = strlen(key) + 1 + strlen(value) + sizeof(struct packet);
 
-    if (packet_size < (EAGER_PROTOCOL_LIMIT)) {
+    if (!use_rndv_protocol && (packet_size < EAGER_PROTOCOL_LIMIT)) {
         /* Eager protocol - exercise part 1 */
         set_packet->type = EAGER_SET_REQUEST;
-        /* TODO (4LOC): fill in the rest of the set_packet */
         set_packet->eager_set_request.value_length = strlen(value);
         strncpy(set_packet->eager_set_request.key_and_value, key, strlen(key));
         memset(&(set_packet->eager_set_request.key_and_value[strlen(key)]), '\0', 1);
@@ -1280,7 +1282,6 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
 
     /* Otherwise, use RENDEZVOUS - exercise part 2 */
     set_packet->type = RENDEZVOUS_SET_REQUEST;
-    /* TODO (4LOC): fill in the rest of the set_packet - request peer address & remote key */
     struct RNDV_CACHE_NODE * current_cache_node = cache_node_head;
     while (current_cache_node != NULL) {
         if (strcmp(current_cache_node->key, key) == 0) {
@@ -1324,6 +1325,7 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     cache_node_tail = temp;
     memcpy(ctx->remote_buf, value, value_length);
     memset(&(ctx->remote_buf[value_length]), '\0', 1);
+    printf("RDMAWRITE - %s\n", ctx->remote_buf);
 
     pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length, ctx->remote_buf, (void *)cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
     return pp_wait_completions(ctx, 1); /* wait for both to complete */
@@ -1333,29 +1335,32 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
 int kv_get(void *kv_handle, const char *key, char **value) {
     struct pingpong_context *ctx = kv_handle;
     /* check if key is cached 0 so its actually a big value*/
-    struct RNDV_CACHE_NODE * temp_cache_node = cache_node_head;
-    while (temp_cache_node != NULL) {
-        if (strcmp(key, temp_cache_node->key) == 0) {
-            // get results from server
-            pp_post_send(ctx, IBV_WR_RDMA_READ, temp_cache_node->val_len, ctx->remote_buf,
-                         (void *) temp_cache_node->srv_addr, temp_cache_node->srv_rkey);
-            pp_wait_completions(ctx, 1);
-            *value = (char *) malloc(temp_cache_node->val_len + 1);
-            strncpy(*value, ctx->remote_buf, temp_cache_node->val_len);
-            return 0;
 
+    if (use_rndv_protocol) {
+        struct RNDV_CACHE_NODE *temp_cache_node = cache_node_head;
+        while (temp_cache_node != NULL) {
+            if (strcmp(key, temp_cache_node->key) == 0) {
+                // get results from server
+                printf("key: %s, val_len:%d\n", temp_cache_node->key, temp_cache_node->val_len);
+                pp_post_send(ctx, IBV_WR_RDMA_READ, temp_cache_node->val_len, ctx->remote_buf,
+                             (void *) temp_cache_node->srv_addr, temp_cache_node->srv_rkey);
+                pp_wait_completions(ctx, 1);
+                *value = (char *) malloc(temp_cache_node->val_len + 1);
+                strncpy(*value, ctx->remote_buf, temp_cache_node->val_len + 1);
+                return 0;
+
+            }
+
+            temp_cache_node = temp_cache_node->next;
         }
-
-        temp_cache_node = temp_cache_node->next;
     }
-
 	unsigned int key_length = strlen(key);
 
     struct packet *get_packet = (struct packet*)ctx->buf;
 
     unsigned packet_size = key_length + 1+ sizeof(struct packet);
 
-    if (packet_size < (EAGER_PROTOCOL_LIMIT)) {
+    if (!use_rndv_protocol && (packet_size < EAGER_PROTOCOL_LIMIT)) {
         /* Eager protocol - exercise part 1 */
         get_packet->type = EAGER_GET_REQUEST;
         strcpy(get_packet->eager_get_request.key, key);
@@ -1421,7 +1426,7 @@ int kv_get(void *kv_handle, const char *key, char **value) {
     *value = (char *) malloc(value_length + 1);
 
     pp_post_send(ctx, IBV_WR_RDMA_READ, value_length, ctx->remote_buf, (void*)cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
-    return pp_wait_completions(ctx, 1); /* wait for both to complete */
+    pp_wait_completions(ctx, 1); /* wait for both to complete */
     strcpy(*value, ctx->remote_buf);
     return 0;
 }
@@ -1429,13 +1434,11 @@ int kv_get(void *kv_handle, const char *key, char **value) {
 
 void kv_release(char *value) {
     free(value);
-    //todo maybe need to delete from cache?
     /* TODO (2LOC): free value */
 }
 
 int kv_close(void *kv_handle) {
 
-    /* todo Eager protocol - exercise part 1 */
     struct pingpong_context *ctx = kv_handle;
     struct packet *close_packet = (struct packet*)ctx->buf;
 
@@ -1447,7 +1450,6 @@ int kv_close(void *kv_handle) {
     pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
 
     pp_wait_completions(ctx, 1); /* await EAGER_GET_REQUEST completion */
-    /* todo Eager protocol - exercise part 1 */
 
     return pp_close_ctx((struct pingpong_context*)kv_handle);
 }
@@ -1671,6 +1673,67 @@ void print_results_to_file(FILE * results_file, ssize_t value_size, double throu
 }
 
 
+void run_throuput_tests(void *kv_ctx, FILE * results_file, bool rndv_mode) {
+    char send_buffer[MAX_TEST_SIZE] = {0};
+    char *recv_buffer;
+
+    use_rndv_protocol = rndv_mode;
+    if (rndv_mode) {
+        fprintf(results_file, "\nRendezvous protocol:\n\n");
+    } else {
+        fprintf(results_file, "\nEager protocol:\n\n");
+    }
+    unsigned packet_struct_size = sizeof(struct packet);
+    ssize_t maximal_test_size = (use_rndv_protocol ? MAX_TEST_SIZE : EAGER_PROTOCOL_LIMIT);
+
+
+    for (ssize_t value_size = 1; value_size < maximal_test_size; value_size = value_size<< 1) {
+        struct timeval start, end;
+        double total_time_usec = 0.0;
+        int total_bytes = 0;
+        int total_attempts = 50;
+        memset(send_buffer, 'a', value_size);
+
+        printf("01\n");
+        if (gettimeofday(&start, NULL)) {
+            perror("gettimeofday");
+            break;
+        }
+        printf("02\n");
+
+        char key[10];
+        for (int attempt = 0; attempt < total_attempts; attempt++) {
+            sprintf(key, "%ld-%d", value_size, attempt);
+            printf("key: %s\n", key);
+            set(kv_ctx, key, send_buffer);
+            printf("05send: %s\n", send_buffer);
+            get(kv_ctx, key, &recv_buffer);
+            printf("06recv: %s\n", recv_buffer);
+            assert(0 == strcmp(send_buffer, recv_buffer));
+
+            printf("07\n");
+            total_bytes = total_bytes + 2 * (strlen(key) + 1 + value_size + packet_struct_size);
+            printf("08\n");
+            release(recv_buffer);
+            printf("09\n");
+        }
+        printf("03\n");
+
+        if (gettimeofday(&end, NULL)) {
+            perror("gettimeofday");
+            break;
+        }
+
+        total_time_usec = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
+        long total_bits_trans = total_bytes * 8;
+        double total_time_sec = total_time_usec / 1000000;
+        double throughput = total_bits_trans / total_time_sec;
+        print_results_to_file(results_file, value_size, throughput);
+        fflush(stdout);
+    }
+}
+
+
 int main(int argc, char **argv) {
     void *kv_ctx; /* handle to internal KV-client context */
 
@@ -1709,84 +1772,48 @@ int main(int argc, char **argv) {
     assert(0 == my_open(&servers[0], &kv_ctx));
 #endif
 
-    /* Test small size */
-//    printf("Testing small size\n");
-    assert(100 < MAX_TEST_SIZE);
-    memset(send_buffer, 'a', 100);
-    assert(0 == set(kv_ctx, "1", send_buffer));
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    release(recv_buffer);
+//    /* Test small size */
+//    assert(100 < MAX_TEST_SIZE);
+//    memset(send_buffer, 'a', 100);
+//    assert(0 == set(kv_ctx, "1", send_buffer));
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    release(recv_buffer);
+//
+//    /* Test logic */
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    release(recv_buffer);
+//    memset(send_buffer, 'b', 100);
+//    assert(0 == set(kv_ctx, "1", send_buffer));
+//    memset(send_buffer, 'c', 100);
+//    assert(0 == set(kv_ctx, "22", send_buffer));
+//    memset(send_buffer, 'b', 100);
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    release(recv_buffer);
 
-    /* Test logic */
-//    printf("Testing logic\n");
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    release(recv_buffer);
-    memset(send_buffer, 'b', 100);
-    assert(0 == set(kv_ctx, "1", send_buffer));
-    memset(send_buffer, 'c', 100);
-    assert(0 == set(kv_ctx, "22", send_buffer));
-    memset(send_buffer, 'b', 100);
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    release(recv_buffer);
-
-    /* Test large size */
-//    printf("Testing large size\n");
-    memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
-    assert(0 == set(kv_ctx, "1", send_buffer));
-    assert(0 == set(kv_ctx, "333", send_buffer));
-    assert(0 == get(kv_ctx, "1", &recv_buffer));
-    assert(0 == strcmp(send_buffer, recv_buffer));
-    release(recv_buffer);
+//    /* Test large size */
+//    use_rndv_protocol = true;
+//    memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
+//    assert(0 == set(kv_ctx, "1", send_buffer));
+//    assert(0 == set(kv_ctx, "333", send_buffer));
+//    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    assert(0 == strcmp(send_buffer, recv_buffer));
+//    release(recv_buffer);
 
     /* Test throughput */
     FILE * results_file;
     results_file = fopen("RESULTS.txt", "w+");
-    unsigned packet_struct_size = sizeof(struct packet);
-    for (ssize_t value_size = 1; value_size < MAX_TEST_SIZE; value_size = value_size<< 1) {
-        struct timeval start, end;
-        double total_time_usec = 0.0;
-        int total_bytes = 0;
-        int total_attempts = 50;
-        memset(send_buffer, 'a', value_size);
+    run_throuput_tests(kv_ctx, results_file, false);
+    run_throuput_tests(kv_ctx, results_file, true);
+    fclose(results_file);
 
-
-        if (gettimeofday(&start, NULL)) {
-            perror("gettimeofday");
-            break;
-        }
-
-        char key[10];
-        for (int attempt = 0; attempt < total_attempts; attempt++) {
-            sprintf(key, "%ld-%d", value_size,attempt);
-
-            set(kv_ctx, key, send_buffer);
-            get(kv_ctx, key, &recv_buffer);
-            assert(0 == strcmp(send_buffer, recv_buffer));
-
-            total_bytes = total_bytes + 2 * (strlen(key) + 1 + value_size + packet_struct_size);
-            release(recv_buffer);
-        }
-
-        if (gettimeofday(&end, NULL)) {
-            perror("gettimeofday");
-            break;
-        }
-
-        total_time_usec = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
-        long total_bits_trans = total_bytes * 8;
-        double total_time_sec = total_time_usec / 1000000;
-        double throughput = total_bits_trans / total_time_sec;
-        print_results_to_file(results_file, value_size, throughput);
-        fflush(stdout);
-    }
 #ifdef EX4
 	recursive_fill_kv(TEST_LOCATION, kv_ctx);
 #endif
 
-    fclose(results_file);
+
     my_close(kv_ctx);
     return 0;
 }
