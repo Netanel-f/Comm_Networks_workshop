@@ -848,41 +848,69 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
         case EAGER_GET_REQUEST: /* TODO (10LOC): handle a short GET() on the server */
             key_length = strlen(packet->eager_get_request.key);
 
-            if (kv_nodes_counter == 0) {
+            while (cur_node != NULL) {
+                if (strcmp(packet->eager_get_request.key, cur_node->key_and_value) == 0) {
+                    /* found match */
+                    struct packet *response_packet = ctx->buf;
+                    response_packet->type = EAGER_GET_RESPONSE;
+                    unsigned int val_len = cur_node->val_len;
+                    memcpy(response_packet->eager_get_response.value, &(cur_node->key_and_value[key_length + 1]), val_len);
+                    memset(&(response_packet->eager_get_response.value[val_len]), '\0', 1);
 
-                struct packet * response_packet = (struct packet*) ctx->buf;
-                response_packet->type = EAGER_GET_RESPONSE;
-                response_packet->eager_get_response.value_length = 1;
-                memset(&response_packet->eager_get_response.value[0], '\0', 1);
-                response_size = sizeof(struct packet) + 1;
-            } else {
-                while (keep_search) {
-                    if (strcmp(packet->eager_get_request.key, cur_node->key_and_value) == 0) {
-                        /* found match */
-                        struct packet *response_packet = ctx->buf;
-                        response_packet->type = EAGER_GET_RESPONSE;
-                        unsigned int val_len = cur_node->val_len;
-                        memcpy(response_packet->eager_get_response.value, &(cur_node->key_and_value[key_length + 1]), val_len);
-                        memset(&(response_packet->eager_get_response.value[val_len]), '\0', 1);
-
-                        response_packet->eager_get_response.value_length = val_len;
-                        response_size = sizeof(struct packet) + val_len;
-                        break;
-                    } else if (cur_node->next != NULL) {
-                        /* no match, yet */
-                        cur_node = cur_node->next;
-                    } else {
-                        /* key is not exists on server, respond "" */
-                        struct packet *response_packet = ctx->buf;
-                        response_packet->type = EAGER_GET_RESPONSE;
-                        memset(response_packet->eager_get_response.value, '\0', 1);
-                        response_packet->eager_get_response.value_length = 1;
-                        response_size = sizeof(response_packet);
-                        break;
-                    }
+                    response_packet->eager_get_response.value_length = val_len;
+                    response_size = sizeof(struct packet) + val_len;
+                    break;
                 }
+                cur_node = cur_node->next;
+            }
+
+            /* No nodes or match wasn't found */
+            if (cur_node == NULL) {
+                /* key is not exists on server, respond "" */
+                struct packet *response_packet = ctx->buf;
+                response_packet->type = EAGER_GET_RESPONSE;
+                memset(response_packet->eager_get_response.value, '\0', 1);
+                response_packet->eager_get_response.value_length = 1;
+                response_size = sizeof(response_packet);
             }
             break;
+
+
+//            if (kv_nodes_counter == 0) {
+//
+//                struct packet * response_packet = (struct packet*) ctx->buf;
+//                response_packet->type = EAGER_GET_RESPONSE;
+//                response_packet->eager_get_response.value_length = 1;
+//                memset(&response_packet->eager_get_response.value[0], '\0', 1);
+//                response_size = sizeof(struct packet) + 1;
+//            } else {
+//                while (keep_search) {
+//                    if (strcmp(packet->eager_get_request.key, cur_node->key_and_value) == 0) {
+//                        /* found match */
+//                        struct packet *response_packet = ctx->buf;
+//                        response_packet->type = EAGER_GET_RESPONSE;
+//                        unsigned int val_len = cur_node->val_len;
+//                        memcpy(response_packet->eager_get_response.value, &(cur_node->key_and_value[key_length + 1]), val_len);
+//                        memset(&(response_packet->eager_get_response.value[val_len]), '\0', 1);
+//
+//                        response_packet->eager_get_response.value_length = val_len;
+//                        response_size = sizeof(struct packet) + val_len;
+//                        break;
+//                    } else if (cur_node->next != NULL) {
+//                        /* no match, yet */
+//                        cur_node = cur_node->next;
+//                    } else {
+//                        /* key is not exists on server, respond "" */
+//                        struct packet *response_packet = ctx->buf;
+//                        response_packet->type = EAGER_GET_RESPONSE;
+//                        memset(response_packet->eager_get_response.value, '\0', 1);
+//                        response_packet->eager_get_response.value_length = 1;
+//                        response_size = sizeof(response_packet);
+//                        break;
+//                    }
+//                }
+//            }
+//            break;
 
         case EAGER_SET_REQUEST: /* TODO (10LOC): handle a short SET() on the server */
             key_length = strlen(packet->eager_set_request.key_and_value);
