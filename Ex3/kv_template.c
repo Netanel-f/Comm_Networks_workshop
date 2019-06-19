@@ -1567,9 +1567,12 @@ int kv_get(void *kv_handle, const char *key, char **value)
             pp_post_send(ctx, IBV_WR_RDMA_READ, temp_cache_node->val_len, ctx->remote_buf,
                          (void *) temp_cache_node->srv_addr, temp_cache_node->srv_rkey);
             pp_wait_completions(ctx, 1);
+            printf("get-serach after wait complete\n");
             *value = (char *) malloc(temp_cache_node->val_len + 1);
+            printf("get-serach after malloc\n");
             strncpy(*value, ctx->remote_buf, temp_cache_node->val_len);
-            return 1;
+            printf("get-serach after copy\n");
+            return 0;
 
         }
 
@@ -1583,7 +1586,7 @@ int kv_get(void *kv_handle, const char *key, char **value)
     unsigned packet_size = key_length + 1+ sizeof(struct packet);
     if (DEBUG) { printf("in kv_get packet_size %d\n", packet_size); }
 
-    if (packet_size < (EAGER_PROTOCOL_LIMIT)) {//TODO 18.6 fix limit. first search it and then look for size.
+    if (packet_size < (EAGER_PROTOCOL_LIMIT)) {
         /* Eager protocol - exercise part 1 */
         get_packet->type = EAGER_GET_REQUEST;
         memcpy(get_packet->eager_get_request.key, key, key_length);
@@ -2062,6 +2065,47 @@ int main(int argc, char **argv)
 ////        fprintf(results_file, "Value size: %ld, Throughput: %.3f bps\n", value_size, throughput);
 //        fflush(stdout);
 //    }
+    FILE * results_file;
+    results_file = fopen("RESULTSrndv.txt", "w+");
+    unsigned packet_struct_size = sizeof(struct packet);
+    for (ssize_t value_size = 1 << 12 ; value_size < MAX_TEST_SIZE; value_size = value_size<< 1) {
+        struct timeval start, end;
+        double total_time_usec = 0.0;
+        int total_bytes = 0;
+        int total_attempts = 20;
+        memset(send_buffer, 'a', value_size);
+
+
+        if (gettimeofday(&start, NULL)) {
+            perror("gettimeofday");
+            break;
+        }
+
+        char key[10];
+        for (int attempt = 0; attempt < total_attempts; attempt++) {
+            sprintf(key, "%ld-%d", value_size,attempt);
+
+            set(kv_ctx, key, send_buffer);
+            get(kv_ctx, key, &recv_buffer);
+            assert(0 == strcmp(send_buffer, recv_buffer));
+
+            total_bytes = total_bytes + 2 * (strlen(key) + 1 + value_size + packet_struct_size);
+            release(recv_buffer);
+        }
+
+        if (gettimeofday(&end, NULL)) {
+            perror("gettimeofday");
+            break;
+        }
+
+        total_time_usec = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
+        long total_bits_trans = total_bytes * 8;
+        double total_time_sec = total_time_usec / 1000000;
+        double throughput = total_bits_trans / total_time_sec;
+        print_results_to_file(results_file, value_size, throughput);
+//        fprintf(results_file, "Value size: %ld, Throughput: %.3f bps\n", value_size, throughput);
+        fflush(stdout);
+    }
 #ifdef EX4
 	recursive_fill_kv(TEST_LOCATION, kv_ctx);
 #endif
