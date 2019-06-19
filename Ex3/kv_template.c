@@ -50,7 +50,7 @@
 #include <infiniband/verbs.h>
 
 #define EX3 //todo
-#define DEBUG 1//todo
+#define DEBUG 0//todo
 /* todo */
 #define MIN_POOL_NODES 10
 #define KILOBIT_IN_BITS 1000
@@ -1999,42 +1999,42 @@ int main(int argc, char **argv)
     assert(0 == my_open(&servers[0], &kv_ctx));
 #endif
 
-//    /* Test small size */
-//    printf("Testing small size\n");//todo
-//    assert(100 < MAX_TEST_SIZE);
-//    memset(send_buffer, 'a', 100);
-////    if (DEBUG) { printf("main: before set\n"); }//todo
-//    assert(0 == set(kv_ctx, "1", send_buffer));
-////    if (DEBUG) { printf("main: before get\n"); }//todo
-//    assert(0 == get(kv_ctx, "1", &recv_buffer));
-////    if (DEBUG) { printf("send: %s\n", send_buffer); }//todo
-////    if (DEBUG) { printf("recv: %s\n", recv_buffer); }//todo
-//    assert(0 == strcmp(send_buffer, recv_buffer));
-////    if (DEBUG) { printf("main: before release\n"); }//todo
-//    release(recv_buffer);
-//
-//    /* Test logic */
-//    printf("Testing logic\n");//todo
-////    if (DEBUG) { printf("main: before get 1\n"); }//todo
-//    assert(0 == get(kv_ctx, "1", &recv_buffer));
-////    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }//todo
-////    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }//todo
-//    assert(0 == strcmp(send_buffer, recv_buffer));
-//    release(recv_buffer);
-//    memset(send_buffer, 'b', 100);
-////    if (DEBUG) { printf("main: before set 1\n"); }//todo
-//    assert(0 == set(kv_ctx, "1", send_buffer));
-//    memset(send_buffer, 'c', 100);
-////    if (DEBUG) { printf("main: before set 2\n"); }//todo
-//    assert(0 == set(kv_ctx, "22", send_buffer));
-//    memset(send_buffer, 'b', 100);
-////    if (DEBUG) { printf("main: before get 1\n"); }//todo
-//    assert(0 == get(kv_ctx, "1", &recv_buffer));
-////    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }//todo
-////    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }//todo
-//    assert(0 == strcmp(send_buffer, recv_buffer));
-////    if (DEBUG) { printf("main: before release\n"); }//todo
-//    release(recv_buffer);
+    /* Test small size */
+    printf("Testing small size\n");//todo
+    assert(100 < MAX_TEST_SIZE);
+    memset(send_buffer, 'a', 100);
+//    if (DEBUG) { printf("main: before set\n"); }//todo
+    assert(0 == set(kv_ctx, "1", send_buffer));
+//    if (DEBUG) { printf("main: before get\n"); }//todo
+    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    if (DEBUG) { printf("send: %s\n", send_buffer); }//todo
+//    if (DEBUG) { printf("recv: %s\n", recv_buffer); }//todo
+    assert(0 == strcmp(send_buffer, recv_buffer));
+//    if (DEBUG) { printf("main: before release\n"); }//todo
+    release(recv_buffer);
+
+    /* Test logic */
+    printf("Testing logic\n");//todo
+//    if (DEBUG) { printf("main: before get 1\n"); }//todo
+    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }//todo
+//    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }//todo
+    assert(0 == strcmp(send_buffer, recv_buffer));
+    release(recv_buffer);
+    memset(send_buffer, 'b', 100);
+//    if (DEBUG) { printf("main: before set 1\n"); }//todo
+    assert(0 == set(kv_ctx, "1", send_buffer));
+    memset(send_buffer, 'c', 100);
+//    if (DEBUG) { printf("main: before set 2\n"); }//todo
+    assert(0 == set(kv_ctx, "22", send_buffer));
+    memset(send_buffer, 'b', 100);
+//    if (DEBUG) { printf("main: before get 1\n"); }//todo
+    assert(0 == get(kv_ctx, "1", &recv_buffer));
+//    if (DEBUG) { printf("main: sendbuf %s\n", send_buffer); }//todo
+//    if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }//todo
+    assert(0 == strcmp(send_buffer, recv_buffer));
+//    if (DEBUG) { printf("main: before release\n"); }//todo
+    release(recv_buffer);
 
     /* Test large size */
 //    if (DEBUG) { printf("main: TEST LARGE SIZE\n"); }//todo
@@ -2051,54 +2051,52 @@ int main(int argc, char **argv)
     if (DEBUG) { printf("main: recvbuf %s\n", recv_buffer); }//todo
     assert(0 == strcmp(send_buffer, recv_buffer));
     if (DEBUG) { printf("main: before get 14\n"); }//todo
-    assert(0 == get(kv_ctx, "14", &recv_buffer));//todo delete me!
     if (DEBUG) { printf("main: before release\n"); }//todo
     release(recv_buffer);
     if (DEBUG) { printf("main: done and closing\n"); }//todo
 
-//
-//    /* Test throughput */
-//    FILE * results_file;
-//    results_file = fopen("RESULTS.txt", "w+");
-//    unsigned packet_struct_size = sizeof(struct packet);
-//    for (ssize_t value_size = 1; value_size < MAX_TEST_SIZE; value_size = value_size<< 1) {
-//        struct timeval start, end;
-//        double total_time_usec = 0.0;
-//        int total_bytes = 0;
-//        int total_attempts = 50;
-//        memset(send_buffer, 'a', value_size);
-//
-//
-//        if (gettimeofday(&start, NULL)) {
-//            perror("gettimeofday");
-//            break;
-//        }
-//
-//        char key[10];
-//        for (int attempt = 0; attempt < total_attempts; attempt++) {
-//            sprintf(key, "%ld-%d", value_size,attempt);
-//
-//            set(kv_ctx, key, send_buffer);
-//            get(kv_ctx, key, &recv_buffer);
-//            assert(0 == strcmp(send_buffer, recv_buffer));
-//
-//            total_bytes = total_bytes + 2 * (strlen(key) + 1 + value_size + packet_struct_size);
-//            release(recv_buffer);
-//        }
-//
-//        if (gettimeofday(&end, NULL)) {
-//            perror("gettimeofday");
-//            break;
-//        }
-//
-//        total_time_usec = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
-//        long total_bits_trans = total_bytes * 8;
-//        double total_time_sec = total_time_usec / 1000000;
-//        double throughput = total_bits_trans / total_time_sec;
-//        print_results_to_file(results_file, value_size, throughput);
-////        fprintf(results_file, "Value size: %ld, Throughput: %.3f bps\n", value_size, throughput);
-//        fflush(stdout);
-//    }
+
+    /* Test throughput */
+    FILE * results_file;
+    results_file = fopen("RESULTS.txt", "w+");
+    unsigned packet_struct_size = sizeof(struct packet);
+    for (ssize_t value_size = 1; value_size < MAX_TEST_SIZE; value_size = value_size<< 1) {
+        struct timeval start, end;
+        double total_time_usec = 0.0;
+        int total_bytes = 0;
+        int total_attempts = 50;
+        memset(send_buffer, 'a', value_size);
+
+
+        if (gettimeofday(&start, NULL)) {
+            perror("gettimeofday");
+            break;
+        }
+
+        char key[10];
+        for (int attempt = 0; attempt < total_attempts; attempt++) {
+            sprintf(key, "%ld-%d", value_size,attempt);
+
+            set(kv_ctx, key, send_buffer);
+            get(kv_ctx, key, &recv_buffer);
+            assert(0 == strcmp(send_buffer, recv_buffer));
+
+            total_bytes = total_bytes + 2 * (strlen(key) + 1 + value_size + packet_struct_size);
+            release(recv_buffer);
+        }
+
+        if (gettimeofday(&end, NULL)) {
+            perror("gettimeofday");
+            break;
+        }
+
+        total_time_usec = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
+        long total_bits_trans = total_bytes * 8;
+        double total_time_sec = total_time_usec / 1000000;
+        double throughput = total_bits_trans / total_time_sec;
+        print_results_to_file(results_file, value_size, throughput);
+        fflush(stdout);
+    }
 #ifdef EX4
 	recursive_fill_kv(TEST_LOCATION, kv_ctx);
 #endif
