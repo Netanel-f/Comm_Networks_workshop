@@ -789,7 +789,7 @@ static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode,
         list = (struct ibv_sge) {
                 .addr	= (uintptr_t) (local_ptr ? local_ptr : ctx->buf),
                 .length = size,
-                .lkey	= (local_ptr == ctx->remote_buf ? ctx->remote_mr->lkey : ctx->mr->lkey)//todo
+                .lkey	= (local_ptr == ctx->remote_buf ? ctx->remote_mr->lkey : ctx->mr->lkey)
         };
     }
 
@@ -843,7 +843,6 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             key_length = strlen(packet->eager_get_request.key);
 
             while (cur_node != NULL) {
-                printf("cur_node key %s\n", cur_node->key_and_value);//todo
                 if (strcmp(packet->eager_get_request.key, cur_node->key_and_value) == 0) {
                     /* found match */
                     struct packet *response_packet = ctx->buf;
@@ -1325,7 +1324,6 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     cache_node_tail = temp;
     memcpy(ctx->remote_buf, value, value_length);
     memset(&(ctx->remote_buf[value_length]), '\0', 1);
-    printf("RDMAWRITE - %s\n", ctx->remote_buf);
 
     pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length, ctx->remote_buf, (void *)cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
     return pp_wait_completions(ctx, 1); /* wait for both to complete */
@@ -1341,7 +1339,6 @@ int kv_get(void *kv_handle, const char *key, char **value) {
         while (temp_cache_node != NULL) {
             if (strcmp(key, temp_cache_node->key) == 0) {
                 // get results from server
-                printf("key: %s, val_len:%d\n", temp_cache_node->key, temp_cache_node->val_len);
                 pp_post_send(ctx, IBV_WR_RDMA_READ, temp_cache_node->val_len, ctx->remote_buf,
                              (void *) temp_cache_node->srv_addr, temp_cache_node->srv_rkey);
                 pp_wait_completions(ctx, 1);
@@ -1434,7 +1431,6 @@ int kv_get(void *kv_handle, const char *key, char **value) {
 
 void kv_release(char *value) {
     free(value);
-    /* TODO (2LOC): free value */
 }
 
 int kv_close(void *kv_handle) {
@@ -1679,8 +1675,10 @@ void run_throuput_tests(void *kv_ctx, FILE * results_file, bool rndv_mode) {
 
     use_rndv_protocol = rndv_mode;
     if (rndv_mode) {
+        printf("Testing Rendezvous protocol...\n");
         fprintf(results_file, "\nRendezvous protocol:\n\n");
     } else {
+        printf("Testing Eager protocol...\n");
         fprintf(results_file, "\nEager protocol:\n\n");
     }
     unsigned packet_struct_size = sizeof(struct packet);
@@ -1694,30 +1692,21 @@ void run_throuput_tests(void *kv_ctx, FILE * results_file, bool rndv_mode) {
         int total_attempts = 50;
         memset(send_buffer, 'a', value_size);
 
-        printf("01\n");
         if (gettimeofday(&start, NULL)) {
             perror("gettimeofday");
             break;
         }
-        printf("02\n");
 
         char key[10];
         for (int attempt = 0; attempt < total_attempts; attempt++) {
             sprintf(key, "%ld-%d", value_size, attempt);
-            printf("key: %s\n", key);
             set(kv_ctx, key, send_buffer);
-            printf("05send: %s\n", send_buffer);
             get(kv_ctx, key, &recv_buffer);
-            printf("06recv: %s\n", recv_buffer);
             assert(0 == strcmp(send_buffer, recv_buffer));
 
-            printf("07\n");
             total_bytes = total_bytes + 2 * (strlen(key) + 1 + value_size + packet_struct_size);
-            printf("08\n");
             release(recv_buffer);
-            printf("09\n");
         }
-        printf("03\n");
 
         if (gettimeofday(&end, NULL)) {
             perror("gettimeofday");
@@ -1737,8 +1726,8 @@ void run_throuput_tests(void *kv_ctx, FILE * results_file, bool rndv_mode) {
 int main(int argc, char **argv) {
     void *kv_ctx; /* handle to internal KV-client context */
 
-    char send_buffer[MAX_TEST_SIZE] = {0};
-    char *recv_buffer;
+//    char send_buffer[MAX_TEST_SIZE] = {0};
+//    char *recv_buffer;
 
     struct kv_server_address servers[2] = {
             {
@@ -1760,8 +1749,7 @@ int main(int argc, char **argv) {
 
     g_argc = argc;
     g_argv = argv;
-//    if (argc > 1) {//todo
-    if (argc == 1) {//todo
+    if (argc == 1) {
         run_server();
 		return 0;
     }
