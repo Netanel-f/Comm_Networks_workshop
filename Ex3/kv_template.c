@@ -66,7 +66,7 @@ char **g_argv;
 
 struct KV_NODE {
     struct KV_NODE * next;
-    struct KV_NODE * prev;//todo remove
+    struct KV_NODE * prev;
     unsigned int val_len;
     char key_and_value[0];
 };
@@ -89,7 +89,7 @@ struct RNDV_CACHE_NODE {
     uint64_t srv_addr;
     unsigned int srv_rkey;
     unsigned int val_len;
-    unsigned int key_len;//todo check if used
+    unsigned int key_len;
     char key[0];
 };
 
@@ -209,12 +209,15 @@ struct kv_server_address {
     short port; /* This is useful for multiple servers on a host */
 };
 
+
 enum {
 	PINGPONG_RECV_WRID = 1,
 	PINGPONG_SEND_WRID = 2,
 };
 
+
 static int page_size;
+
 
 struct pingpong_context {
 	struct ibv_context	*context;
@@ -234,6 +237,7 @@ struct pingpong_context {
 	struct ibv_port_attr     portinfo;
 };
 
+
 struct pingpong_dest {
 	int lid;
 	int qpn;
@@ -241,8 +245,8 @@ struct pingpong_dest {
 	union ibv_gid gid;
 };
 
-enum ibv_mtu pp_mtu_to_enum(int mtu)
-{
+
+enum ibv_mtu pp_mtu_to_enum(int mtu) {
     switch (mtu) {
     case 256:  return IBV_MTU_256;
     case 512:  return IBV_MTU_512;
@@ -253,8 +257,8 @@ enum ibv_mtu pp_mtu_to_enum(int mtu)
     }
 }
 
-uint16_t pp_get_local_lid(struct ibv_context *context, int port)
-{
+
+uint16_t pp_get_local_lid(struct ibv_context *context, int port) {
     struct ibv_port_attr attr;
 
     if (ibv_query_port(context, port, &attr))
@@ -263,14 +267,13 @@ uint16_t pp_get_local_lid(struct ibv_context *context, int port)
     return attr.lid;
 }
 
-int pp_get_port_info(struct ibv_context *context, int port,
-             struct ibv_port_attr *attr)
-{
+
+int pp_get_port_info(struct ibv_context *context, int port, struct ibv_port_attr *attr) {
     return ibv_query_port(context, port, attr);
 }
 
-void wire_gid_to_gid(const char *wgid, union ibv_gid *gid)
-{
+
+void wire_gid_to_gid(const char *wgid, union ibv_gid *gid) {
     char tmp[9];
     uint32_t v32;
     int i;
@@ -282,18 +285,18 @@ void wire_gid_to_gid(const char *wgid, union ibv_gid *gid)
     }
 }
 
-void gid_to_wire_gid(const union ibv_gid *gid, char wgid[])
-{
+
+void gid_to_wire_gid(const union ibv_gid *gid, char wgid[]) {
     int i;
 
     for (i = 0; i < 4; ++i)
         sprintf(&wgid[i * 8], "%08x", htonl(*(uint32_t *)(gid->raw + i * 4)));
 }
 
+
 static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
 			  enum ibv_mtu mtu, int sl,
-			  struct pingpong_dest *dest, int sgid_idx)
-{
+			  struct pingpong_dest *dest, int sgid_idx) {
 	struct ibv_qp_attr attr = {
 		.qp_state		= IBV_QPS_RTR,
 		.path_mtu		= mtu,
@@ -348,9 +351,9 @@ static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
 	return 0;
 }
 
+
 static struct pingpong_dest *pp_client_exch_dest(const char *servername, int port,
-						 const struct pingpong_dest *my_dest)
-{
+						 const struct pingpong_dest *my_dest) {
 	struct addrinfo *res, *t;
 	struct addrinfo hints = {
 		.ai_family   = AF_INET,
@@ -419,12 +422,12 @@ out:
 	return rem_dest;
 }
 
+
 static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
 						 int ib_port, enum ibv_mtu mtu,
 						 int port, int sl,
 						 const struct pingpong_dest *my_dest,
-						 int sgid_idx)
-{
+						 int sgid_idx) {
 	struct addrinfo *res, *t;
 	struct addrinfo hints = {
 		.ai_flags    = AI_PASSIVE,
@@ -520,12 +523,11 @@ out:
 #include <sys/param.h>
 #include <stdbool.h>
 
+
 static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 					    int rx_depth, int port,
-					    int use_event, int is_server)
-{
+					    int use_event, int is_server) {
 	struct pingpong_context *ctx;
-//	printf("initctx\n");//todo
 
 	ctx = calloc(1, sizeof *ctx);
 	if (!ctx)
@@ -584,13 +586,10 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 
 	/* init pool for server */
 	if (is_server) {
-//        printf("init pool head\n");//todo
         rndv_pool_head = (struct RNDV_MEMORY_INFO *) malloc(sizeof(struct RNDV_MEMORY_INFO));
         rndv_pool_head->next = NULL;
         rndv_pool_head->rndv_mr = NULL;
-//        printf("init pool head buffer\n");//todo
         memset(rndv_pool_head->rndv_buffer, '\0', MAX_TEST_SIZE);
-//        printf("init pool head mr\n");//todo
         rndv_pool_head->rndv_mr = ibv_reg_mr(ctx->pd, &(rndv_pool_head->rndv_buffer), MAX_TEST_SIZE,
                                              IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE |
                                              IBV_ACCESS_REMOTE_READ);
@@ -599,7 +598,6 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
             return NULL;
         }
         rndv_pool_nodes_counter++;
-//        printf("after pool head\n");//todo
 
         struct RNDV_MEMORY_INFO *current_pool_node = rndv_pool_head;
 
@@ -686,8 +684,8 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 	return ctx;
 }
 
-int pp_close_ctx(struct pingpong_context *ctx)
-{
+
+int pp_close_ctx(struct pingpong_context *ctx) {
 	if (ibv_destroy_qp(ctx->qp)) {
 		fprintf(stderr, "Couldn't destroy QP\n");
 		return 1;
@@ -719,8 +717,6 @@ int pp_close_ctx(struct pingpong_context *ctx)
 			fprintf(stderr, "Couldn't deregister MR\n");
 			return 1;
 		}
-//		free(rndv_head->mem_info->rndv_buffer);//todo
-//		free(rndv_head->key);//todo
 		struct RNDV_NODE * temp = rndv_head->next;
 		free(rndv_head);
 		rndv_head = temp;
@@ -756,8 +752,8 @@ int pp_close_ctx(struct pingpong_context *ctx)
 	return 0;
 }
 
-static int pp_post_recv(struct pingpong_context *ctx, int n)
-{
+
+static int pp_post_recv(struct pingpong_context *ctx, int n) {
 	struct ibv_sge list = {
 		.addr	= (uintptr_t) ctx->buf,
 		.length = ctx->size,
@@ -779,8 +775,8 @@ static int pp_post_recv(struct pingpong_context *ctx, int n)
 	return i;
 }
 
-static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key)
-{
+
+static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key) {
     struct ibv_sge list;
     if (ctx->server) {
         list = (struct ibv_sge) {
@@ -814,8 +810,8 @@ static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode,
 	return ibv_post_send(ctx->qp, &wr, &bad_wr);
 }
 
-static void usage(const char *argv0)
-{
+
+static void usage(const char *argv0) {
 	printf("Usage:\n");
 	printf("  %s            start a server and wait for connection\n", argv0);
 	printf("  %s <host>     connect to server at <host>\n", argv0);
@@ -833,10 +829,9 @@ static void usage(const char *argv0)
 	printf("  -g, --gid-idx=<gid index> local port gid index\n");
 }
 
-void handle_server_packets_only(struct pingpong_context *ctx, struct packet *packet)
-{
-    unsigned response_size = 0;
 
+void handle_server_packets_only(struct pingpong_context *ctx, struct packet *packet) {
+    unsigned response_size = 0;
     struct KV_NODE * cur_node = kv_head;
     int key_length;
 
@@ -989,8 +984,8 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     }
 }
 
-int orig_main(struct kv_server_address *server, unsigned size, int argc, char *argv[], struct pingpong_context **result_ctx)
-{
+
+int orig_main(struct kv_server_address *server, unsigned size, int argc, char *argv[], struct pingpong_context **result_ctx) {
 	struct ibv_device      **dev_list;
 	struct ibv_device	*ib_dev;
 	struct pingpong_context *ctx;
@@ -1191,6 +1186,7 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
     return 0;
 }
 
+
 int pp_wait_completions(struct pingpong_context *ctx, int iters) {
     int rcnt, scnt, num_cq_events, use_event = 0;
 	rcnt = scnt = 0;
@@ -1295,6 +1291,7 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
         }
         current_cache_node = current_cache_node->next;
     }
+
     // need to get remote access info from server
     unsigned int key_length = strlen(key);
     packet_size = key_length + 1 + sizeof(struct packet);
@@ -1331,6 +1328,7 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length, ctx->remote_buf, (void *)cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
     return pp_wait_completions(ctx, 1); /* wait for both to complete */
 }
+
 
 int kv_get(void *kv_handle, const char *key, char **value) {
     struct pingpong_context *ctx = kv_handle;
@@ -1428,15 +1426,14 @@ int kv_get(void *kv_handle, const char *key, char **value) {
     return 0;
 }
 
-void kv_release(char *value)
-{
+
+void kv_release(char *value) {
     free(value);
     //todo maybe need to delete from cache?
     /* TODO (2LOC): free value */
 }
 
-int kv_close(void *kv_handle)
-{
+int kv_close(void *kv_handle) {
 
     /* todo Eager protocol - exercise part 1 */
     struct pingpong_context *ctx = kv_handle;
@@ -1454,6 +1451,7 @@ int kv_close(void *kv_handle)
 
     return pp_close_ctx((struct pingpong_context*)kv_handle);
 }
+
 
 #ifdef EX3
 #define my_open  kv_open
@@ -1626,7 +1624,6 @@ void recursive_fill_kv(char const* dirname, void *dkv_h) {
 #endif /* EX4 */
 
 
-
 void run_server() {
     struct pingpong_context *ctx;
     struct kv_server_address server = {0};
@@ -1674,8 +1671,7 @@ void print_results_to_file(FILE * results_file, ssize_t value_size, double throu
 }
 
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     void *kv_ctx; /* handle to internal KV-client context */
 
     char send_buffer[MAX_TEST_SIZE] = {0};
@@ -1714,7 +1710,7 @@ int main(int argc, char **argv)
 #endif
 
     /* Test small size */
-//    printf("Testing small size\n");//todo
+//    printf("Testing small size\n");
     assert(100 < MAX_TEST_SIZE);
     memset(send_buffer, 'a', 100);
     assert(0 == set(kv_ctx, "1", send_buffer));
@@ -1723,7 +1719,7 @@ int main(int argc, char **argv)
     release(recv_buffer);
 
     /* Test logic */
-//    printf("Testing logic\n");//todo
+//    printf("Testing logic\n");
     assert(0 == get(kv_ctx, "1", &recv_buffer));
     assert(0 == strcmp(send_buffer, recv_buffer));
     release(recv_buffer);
@@ -1737,7 +1733,7 @@ int main(int argc, char **argv)
     release(recv_buffer);
 
     /* Test large size */
-//    printf("Testing large size\n");//todo
+//    printf("Testing large size\n");
     memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
     assert(0 == set(kv_ctx, "1", send_buffer));
     assert(0 == set(kv_ctx, "333", send_buffer));
