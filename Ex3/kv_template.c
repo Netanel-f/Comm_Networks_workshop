@@ -94,6 +94,7 @@ struct RNDV_CACHE_NODE {
 };
 
 struct KV_NODE * kv_head = NULL;
+struct KV_NODE * kv_tail = NULL;
 int kv_nodes_counter = 0;
 
 /* server data structs for use */
@@ -879,19 +880,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             key_length = strlen(packet->eager_set_request.key_and_value);
             unsigned int vlength = packet->eager_set_request.value_length;
 
-            if (kv_nodes_counter == 0) {
-                kv_head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
-                kv_head->val_len = vlength;
-
-                memcpy(kv_head->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
-                memset(&(kv_head->key_and_value[key_length + 1 + vlength]), '\0', 2);
-                kv_head->next = NULL;
-                kv_head->prev = NULL;
-                kv_nodes_counter++;
-                break;
-            }
-
-            while (keep_search) {
+            while (cur_node != NULL) {
                 if (strcmp(cur_node->key_and_value, packet->eager_set_request.key_and_value) == 0) {
                     /* found match */
                     struct KV_NODE * prev_node = cur_node->prev;
@@ -899,7 +888,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     free(cur_node);
                     cur_node = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
                     memcpy(cur_node->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
-                    memset(&(kv_head->key_and_value[key_length + 1 + vlength]), '\0', 2);
+                    memset(&(kv_head->key_and_value[key_length + 1 + vlength]), '\0', 1);
 
                     if (prev_node != NULL) {
                         prev_node->next = cur_node;
@@ -910,25 +899,79 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                         next_node->prev = cur_node;
                     }
                     break;
-
-                } else if (cur_node->next != NULL) {
-                    /* no match, yet */
-                     cur_node = cur_node->next;
-
-                } else {
-                    /* key is not exists on server, appending it */
-                    cur_node->next = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
-                    cur_node->next->val_len = vlength;
-
-                    memcpy(cur_node->next->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
-
-                    cur_node->next->next = NULL;
-                    cur_node->next->prev = cur_node;
-                    kv_nodes_counter++;
-                    break;
                 }
+                cur_node = cur_node->next;
+            }
+
+            if (cur_node == NULL) {
+                /* key is not exists on server, appending it */
+                struct KV_NODE * temp_node = (struct KV_NODE *) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
+                memcpy(temp_node->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
+                temp_node->next = NULL;
+                temp_node->val_len = vlength;
+
+                if (kv_tail == NULL) {
+                    temp_node->prev = NULL;
+                    kv_head = temp_node;
+                    kv_tail = temp_node;
+                } else {
+                    temp_node->prev = kv_tail;
+                    kv_tail = temp_node;
+                }
+                kv_nodes_counter++;
             }
             break;
+
+//            if (kv_nodes_counter == 0) {
+//                kv_head = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
+//                kv_head->val_len = vlength;
+//
+//                memcpy(kv_head->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
+//                memset(&(kv_head->key_and_value[key_length + 1 + vlength]), '\0', 2);
+//                kv_head->next = NULL;
+//                kv_head->prev = NULL;
+//                kv_nodes_counter++;
+//                break;
+//            }
+//
+//            while (keep_search) {
+//                if (strcmp(cur_node->key_and_value, packet->eager_set_request.key_and_value) == 0) {
+//                    /* found match */
+//                    struct KV_NODE * prev_node = cur_node->prev;
+//                    struct KV_NODE * next_node = cur_node->next;
+//                    free(cur_node);
+//                    cur_node = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
+//                    memcpy(cur_node->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
+//                    memset(&(kv_head->key_and_value[key_length + 1 + vlength]), '\0', 2);
+//
+//                    if (prev_node != NULL) {
+//                        prev_node->next = cur_node;
+//                    }
+//                    cur_node->prev = prev_node;
+//                    cur_node->next = next_node;
+//                    if (next_node != NULL) {
+//                        next_node->prev = cur_node;
+//                    }
+//                    break;
+//
+//                } else if (cur_node->next != NULL) {
+//                    /* no match, yet */
+//                     cur_node = cur_node->next;
+//
+//                } else {
+//                    /* key is not exists on server, appending it */
+//                    cur_node->next = (struct KV_NODE * ) malloc(sizeof(struct KV_NODE) + key_length + 2 + vlength);
+//                    cur_node->next->val_len = vlength;
+//
+//                    memcpy(cur_node->next->key_and_value, packet->eager_set_request.key_and_value, key_length + 1 + vlength);
+//
+//                    cur_node->next->next = NULL;
+//                    cur_node->next->prev = cur_node;
+//                    kv_nodes_counter++;
+//                    break;
+//                }
+//            }
+//            break;
 
         case RENDEZVOUS_GET_REQUEST: /* TODO (10LOC): handle a long GET() on the server */
 
