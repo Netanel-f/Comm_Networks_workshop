@@ -1837,6 +1837,7 @@ int main(int argc, char **argv)
 	recursive_fill_kv(TEST_LOCATION, kv_ctx);
 #endif
 
+    fclose(results_file);
     my_close(kv_ctx);
     return 0;
 }
