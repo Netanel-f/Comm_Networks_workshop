@@ -3,8 +3,8 @@ CXX = g++
 
 INCS=-I.
 #CFLAGS = -Wall -std=c11 -libverbs -D _GNU_SOURCE
-#CFLAGS = -std=c11 -libverbs -D _GNU_SOURCE
-CFLAGS = -std=c11 -libverbs
+CFLAGS = -std=c11 -libverbs -D _GNU_SOURCE
+#CFLAGS = -std=c11 -libverbs
 CXXFLAGS = -Wall -std=c++11 -g $(INCS)
 
 
@@ -23,8 +23,8 @@ all: ${EXE}
 server: kv_server.o
 	$(CC) $(CFLAGS) -o kv_server kv_server.o
 
-kv_server.o: kv_server.c kv_shared.h kv_shared.c
-	$(CC) $(CFLAGS) -c kv_server.c kv_shared.h kv_shared.c
+kv_server.o: kv_shared.h kv_shared.c kv_server.c
+	$(CC) $(CFLAGS) -c kv_shared.h kv_shared.c kv_server.c
 
 client: kv_client.o
 	$(CC) $(CFLAGS) -o kv_client kv_client.o

@@ -34,8 +34,6 @@
 #include <sys/stat.h>
 #endif
 
-#define _GNU_SOURCE
-
 
 #define EAGER_PROTOCOL_LIMIT (1 << 12) /* 4KB limit */
 #define MAX_TEST_SIZE (10 * EAGER_PROTOCOL_LIMIT)

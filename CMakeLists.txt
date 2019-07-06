@@ -2,7 +2,8 @@
 project(Comm_Nets)
 
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_C_FLAGS -Wall -libverbs -D _GNU_SOURCE)
+#set(CMAKE_C_FLAGS -Wall -libverbs -D _GNU_SOURCE)
+set(CMAKE_C_FLAGS -Wall -libverbs)
 #set(CMAKE_CXX_FLAGS -Wall -libverbs -D _GNU_SOURCE)
 
 

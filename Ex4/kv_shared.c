@@ -327,41 +327,6 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
         return NULL;
     }
 
-    /* init pool for server */
-    if (is_server) {
-        rndv_pool_head = (struct RNDV_MEMORY_INFO *) malloc(sizeof(struct RNDV_MEMORY_INFO));
-        rndv_pool_head->next = NULL;
-        rndv_pool_head->rndv_mr = NULL;
-        memset(rndv_pool_head->rndv_buffer, '\0', MAX_TEST_SIZE);
-        rndv_pool_head->rndv_mr = ibv_reg_mr(ctx->pd, &(rndv_pool_head->rndv_buffer), MAX_TEST_SIZE,
-                                             IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE |
-                                             IBV_ACCESS_REMOTE_READ);
-        if (!rndv_pool_head->rndv_mr) {
-            fprintf(stderr, "Couldn't register MR\n");
-            return NULL;
-        }
-        rndv_pool_nodes_counter++;
-
-        struct RNDV_MEMORY_INFO *current_pool_node = rndv_pool_head;
-
-        while (rndv_pool_nodes_counter < MIN_POOL_NODES) {
-            current_pool_node->next = (struct RNDV_MEMORY_INFO *) malloc(
-                    sizeof(struct RNDV_MEMORY_INFO));
-            current_pool_node = current_pool_node->next;
-            memset(current_pool_node->rndv_buffer, '\0', MAX_TEST_SIZE);
-            current_pool_node->rndv_mr = ibv_reg_mr(ctx->pd, current_pool_node->rndv_buffer,
-                                                    MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE |
-                                                                   IBV_ACCESS_REMOTE_WRITE |
-                                                                   IBV_ACCESS_REMOTE_READ);
-            if (!current_pool_node->rndv_mr) {
-                fprintf(stderr, "Couldn't register MR\n");
-                return NULL;
-            }
-            rndv_pool_nodes_counter++;
-        }
-        rndv_pool_tail = current_pool_node;
-    }
-
     ctx->cq = ibv_create_cq(ctx->context, rx_depth + 1, NULL,
                             ctx->channel, 0);
     if (!ctx->cq) {
