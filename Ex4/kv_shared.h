@@ -104,7 +104,6 @@ struct packet {
 
         /* RENDEZVOUS PROTOCOL PACKETS */
         struct {
-            unsigned int key_len;
             char key[0];
         } rndv_get_request;
 
@@ -125,9 +124,9 @@ struct packet {
             unsigned int server_key;
         } rndv_set_response;
 
-//        struct {
-//            unsigned int to_close;
-//        } close_connection;
+        struct {
+            unsigned int to_close;
+        } close_connection;
 
 #ifdef EX4
         struct {

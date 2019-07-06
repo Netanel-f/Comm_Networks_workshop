@@ -4,6 +4,11 @@
 int g_argc;
 char **g_argv;
 
+/* client cache of last accessed key */
+char last_rndv_accessed_key[EAGER_PROTOCOL_LIMIT] = "";
+unsigned int last_accesed_key_val_length = 0;
+uint64_t last_accessed_server_addr = 0;
+uint32_t last_accessed_server_rkey = 0;
 
 /* client memory pool */
 MEMORY_INFO * mem_pool_head = NULL;
@@ -69,6 +74,10 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     unsigned packet_size = key_length + value_length + sizeof(struct packet) + 2;
 
     if (packet_size < EAGER_PROTOCOL_LIMIT) {
+        if (strcmp(key, last_rndv_accessed_key) == 0) {
+            memset(last_rndv_accessed_key, '\0', key_length);
+            last_accesed_key_val_length = 0;
+        }
         /* Eager protocol - exercise part 1 */
         set_packet->type = EAGER_SET_REQUEST;
         memcpy(set_packet->eager_set_request.key_and_value, key, key_length + 1);
@@ -83,6 +92,25 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
 
     /* Otherwise, use RENDEZVOUS - exercise part 2 */
     set_packet->type = RENDEZVOUS_SET_REQUEST;
+    /* maybe already cached*/
+    if (strcmp(key, last_rndv_accessed_key) == 0) {
+        last_accesed_key_val_length = value_length;
+        // set temp mr
+        struct ibv_mr *orig_mr = ctx->mr;
+        struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) value, value_length + 1,
+                                            IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE |
+                                            IBV_ACCESS_REMOTE_READ);
+        ctx->mr = temp_mr;
+        pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length + 1, value,
+                     (void *) last_accessed_server_addr,
+                     last_accessed_server_rkey);
+
+        int ret_value = pp_wait_completions(ctx, 1);
+        ctx->mr = orig_mr;
+        ibv_dereg_mr(temp_mr);
+        return ret_value;
+    }
+
     packet_size = key_length + 1 + sizeof(struct packet);
     set_packet->rndv_set_request.value_length = value_length + 1;
     memcpy(set_packet->rndv_set_request.key, key, key_length + 1);
@@ -99,8 +127,13 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
 
     /* wait for both to complete */
     assert(pp_wait_completions(ctx, 2));
-
     assert(set_packet->type == RENDEZVOUS_SET_RESPONSE);
+
+    /* update cache */
+    strcpy(last_rndv_accessed_key, key);
+    last_accesed_key_val_length = value_length;
+    last_accessed_server_addr = set_packet->rndv_set_response.server_ptr;
+    last_accessed_server_rkey = set_packet->rndv_set_response.server_key;
 
     pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length + 1, value, (void *)set_packet->rndv_set_response.server_ptr, set_packet->rndv_set_response.server_key);
     int ret_value = pp_wait_completions(ctx, 1);
@@ -123,119 +156,81 @@ int kv_get(void *kv_handle, const char *key, char **value) {
         return -1;
     }
 
-    get_packet->type = EAGER_GET_REQUEST;
-    memcpy(get_packet->eager_get_request.key, key, key_length+1);
+    if (strcmp(key, last_rndv_accessed_key) != 0) {
+        get_packet->type = EAGER_GET_REQUEST;
+        memcpy(get_packet->eager_get_request.key, key, key_length + 1);
 
-    /* Sends the packet to the server */
-    pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0);
-    /* await EAGER_GET_REQUEST completion */
-    pp_wait_completions(ctx, 1);
-    /* await EAGER_GET_RESPONSE / RNDV_GET_RESPONSE completion */
-    pp_wait_completions(ctx, 1);
+        /* Sends the packet to the server */
+        pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0);
+        /* await EAGER_GET_REQUEST completion */
+        pp_wait_completions(ctx, 1);
+        /* await EAGER_GET_RESPONSE / RNDV_GET_RESPONSE completion */
+        pp_wait_completions(ctx, 1);
 
-    struct packet * response_packet = (struct packet *) ctx->buf;
-    unsigned int value_len;
-    switch (response_packet->type) {
+        struct packet *response_packet = (struct packet *) ctx->buf;
+        unsigned int value_len;
+        switch (response_packet->type) {
 
-        case EAGER_GET_RESPONSE:
-            value_len = response_packet->eager_get_response.value_length;
-            *value = (char *) malloc(value_len + 1);
-            memcpy(*value, response_packet->eager_get_response.value, value_len);
-            memset(&((*value)[value_len]), '\0', 1);
-            break;
+            case EAGER_GET_RESPONSE:
+                value_len = response_packet->eager_get_response.value_length;
+                *value = (char *) malloc(value_len + 1);
+                memcpy(*value, response_packet->eager_get_response.value, value_len);
+                memset(&((*value)[value_len]), '\0', 1);
+                break;
 
-        case RENDEZVOUS_GET_RESPONSE:
-            //todo
-            value_len = response_packet->rndv_get_response.value_length;
-            *value = calloc(value_len + 1, 1);
+            case RENDEZVOUS_GET_RESPONSE:
+                value_len = response_packet->rndv_get_response.value_length;
+                *value = calloc(value_len + 1, 1);
 
+                /* update cache */
+                strcpy(last_rndv_accessed_key, key);
+                last_accesed_key_val_length = value_len;
+                last_accessed_server_addr = response_packet->rndv_set_response.server_ptr;
+                last_accessed_server_rkey = response_packet->rndv_set_response.server_key;
 
-            break;
+                // set temp mr
+                struct ibv_mr *orig_mr = ctx->mr;
+                struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) value, value_len + 1,
+                                                    IBV_ACCESS_LOCAL_WRITE |
+                                                    IBV_ACCESS_REMOTE_WRITE |
+                                                    IBV_ACCESS_REMOTE_READ);
+                ctx->mr = temp_mr;
 
-        default:
-            printf("ERROR");//todo
-            return -1;
+                pp_post_send(ctx, IBV_WR_RDMA_READ, value_len + 1, *value,
+                             (void *) response_packet->rndv_get_response.server_ptr,
+                             response_packet->rndv_get_response.server_key);
+                int ret_value = pp_wait_completions(ctx, 1);
+                ctx->mr = orig_mr;
+                ibv_dereg_mr(temp_mr);
+
+                break;
+
+            default:
+                printf("ERROR");//todo
+                return -1;
+        }
+
+    } else {
+        *value = calloc(last_accesed_key_val_length + 1, 1);
+
+        // set temp mr
+        struct ibv_mr *orig_mr = ctx->mr;
+        struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) value, last_accesed_key_val_length + 1,
+                                            IBV_ACCESS_LOCAL_WRITE |
+                                            IBV_ACCESS_REMOTE_WRITE |
+                                            IBV_ACCESS_REMOTE_READ);
+        ctx->mr = temp_mr;
+
+        pp_post_send(ctx, IBV_WR_RDMA_READ, last_accesed_key_val_length + 1, *value,
+                     (void *) last_accessed_server_addr,
+                     last_accessed_server_rkey);
+
+        pp_wait_completions(ctx, 1);
+        ctx->mr = orig_mr;
+        ibv_dereg_mr(temp_mr);
     }
 
     return 0;
-
-
-
-//    unsigned int key_length = strlen(key);
-//
-//    struct packet *get_packet = (struct packet*)ctx->buf;
-//
-//    unsigned packet_size = key_length + 1+ sizeof(struct packet);
-//
-//    if (!use_rndv_protocol && (packet_size < EAGER_PROTOCOL_LIMIT)) {
-//        /* Eager protocol - exercise part 1 */
-//        get_packet->type = EAGER_GET_REQUEST;
-//        strcpy(get_packet->eager_get_request.key, key);
-//        memset(&(get_packet->eager_get_request.key[key_length]), '\0', 1);
-//
-//        pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
-//
-//        pp_wait_completions(ctx, 1); /* await EAGER_GET_REQUEST completion */
-//        pp_wait_completions(ctx, 1); /* await EAGER_SET_REQUEST completion */
-//
-//        struct pingpong_context * kv_handle_temp = (struct pingpong_context *) kv_handle;
-//
-//        struct packet* resp = (struct packet *) kv_handle_temp->buf;
-//        unsigned int value_len = resp->eager_get_response.value_length;
-//        *value = (char *) malloc(value_len + 1);
-//        memcpy(*value, resp->eager_get_response.value, value_len);
-//        memset(&((*value)[value_len]), '\0', 1);
-//        return 0;
-//    }
-//
-//    /* Otherwise, use RENDEZVOUS - exercise part 2 */
-//    get_packet->type = RENDEZVOUS_GET_REQUEST;
-//
-//    struct RNDV_CACHE_NODE * current_cache_node = cache_node_head;
-//    while (current_cache_node != NULL) {
-//        if (strcmp(current_cache_node->key, key) == 0) {
-//            // we can read directly
-//            pp_post_recv(ctx, 1);
-//            pp_post_send(ctx, IBV_WR_RDMA_READ, current_cache_node->val_len + 1, ctx->remote_buf, (void *)current_cache_node->srv_addr, current_cache_node->srv_rkey);
-//            pp_wait_completions(ctx, 2);
-//            strncpy(*value, ctx->remote_buf, current_cache_node->val_len);
-//            return 0;
-//        }
-//    }
-//    // need to get info from server;
-//
-//    packet_size = sizeof(struct packet) + key_length + 1;
-//    strncpy(get_packet->rndv_get_request.key, key, key_length+1);
-//
-//    pp_post_recv(ctx, 1); /* Posts a receive-buffer for RENDEZVOUS_GET_RESPONSE */
-//    pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
-//    assert(pp_wait_completions(ctx, 2)); /* wait for both to complete */
-//
-//
-//    assert(get_packet->type == RENDEZVOUS_GET_RESPONSE);
-//
-//    struct RNDV_CACHE_NODE * temp = (struct RNDV_CACHE_NODE *) malloc(sizeof(struct RNDV_CACHE_NODE) + strlen(key) + 1);
-//    temp->next = NULL;
-//    temp->srv_addr = get_packet->rndv_get_response.server_ptr;
-//    temp->srv_rkey = get_packet->rndv_get_response.server_key;
-//    temp->val_len = get_packet->rndv_get_response.value_length;
-//    temp->key_len = key_length;
-//    strncpy(temp->key, key, key_length);
-//    memset(&(temp->key[key_length]), '\0', 1);
-//    if (cache_node_tail != NULL) {
-//        cache_node_tail->next = temp;
-//    } else {
-//        cache_node_head = temp;
-//    }
-//    cache_node_tail = temp;
-//
-//    unsigned int value_length = get_packet->rndv_get_response.value_length;
-//    *value = (char *) malloc(value_length + 1);
-//
-//    pp_post_send(ctx, IBV_WR_RDMA_READ, value_length, ctx->remote_buf, (void*)cache_node_tail->srv_addr, cache_node_tail->srv_rkey);
-//    pp_wait_completions(ctx, 1); /* wait for both to complete */
-//    strcpy(*value, ctx->remote_buf);
-//    return 0;
 }
 
 
