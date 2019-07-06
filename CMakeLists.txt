@@ -29,7 +29,7 @@ set(CMAKE_C_FLAGS -Wall -libverbs -D _GNU_SOURCE)
 #set(EX2_IB Ex2/ib_perf.c)
 #add_executable(ex2ib ${EX2_IB})
 
-#include_directories(/Users/netanel/Downloads/libibverbs-1.2.1/include)
+include_directories(/Users/netanel/Downloads/libibverbs-1.2.1/include)
 
 #set(EX3_SRC Ex3/kv_template.c)
 #add_executable(ex3 ${EX3_SRC})
@@ -37,7 +37,7 @@ set(CMAKE_C_FLAGS -Wall -libverbs -D _GNU_SOURCE)
 #add_executable(ex3template ${EX3_TMP_SRC})
 
 set(EX4_SHARED_RESOURCES)
-set(EX4_CLIENT Ex4/kv_client.c Ex4/kv_shared.c Ex4/kv_shared.h)
+set(EX4_CLIENT Ex4/kv_client.c Ex4/kv_shared.h)
 set(EX4_SERVER Ex4/kv_server.c Ex4/kv_shared.c Ex4/kv_shared.h)
 set(EX4_INDEXER Ex4/kv_indexer.c Ex4/kv_shared.c Ex4/kv_shared.h)
 

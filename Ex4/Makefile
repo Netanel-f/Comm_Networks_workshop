@@ -2,9 +2,8 @@ CC = gcc
 CXX = g++
 
 INCS=-I.
-#CFLAGS = -Wall -std=c11 -libverbs -D _GNU_SOURCE
+CFLAGS = -Wall -std=c11 -libverbs -D _GNU_SOURCE
 #CFLAGS = -std=c11 -libverbs -D _GNU_SOURCE
-CFLAGS = -std=c11 -libverbs
 CXXFLAGS = -Wall -std=c++11 -g $(INCS)
 
 
@@ -14,7 +13,7 @@ TARNAME = 201209806.tar.gz
 TARSRCS = ${ALL} ${EXE} Makefile
 
 EXE = server client
-ALL = kv_server.c kv_client.c kv_shared.c kv_shared.h README
+ALL = kv_server.c kv_client.c kv_shared.h README
 
 default: all
 
@@ -23,14 +22,20 @@ all: ${EXE}
 server: kv_server.o
 	$(CC) $(CFLAGS) -o kv_server kv_server.o
 
-kv_server.o: kv_server.c kv_shared.h kv_shared.c
-	$(CC) $(CFLAGS) -c kv_server.c kv_shared.h kv_shared.c
+kv_server.o: kv_server.c
+	$(CC) $(CFLAGS) -c kv_server.c
 
 client: kv_client.o
 	$(CC) $(CFLAGS) -o kv_client kv_client.o
 
-kv_client.o: kv_client.c kv_shared.h kv_shared.c
-	$(CC) $(CFLAGS) -c kv_client.c kv_shared.h kv_shared.c
+kv_client.o: kv_client.c
+	$(CC) $(CFLAGS) -c kv_client.c
+
+indexer: kv_indexer.o
+	$(CC) $(CFLAGS) -o kv_indexer kv_indexer.o
+
+kv_indexer.o: kv_indexer.c
+	$(CC) $(CFLAGS) -c kv_indexer.c
 
 
 .PHONY : clean
