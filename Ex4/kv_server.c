@@ -372,6 +372,10 @@ void run_server() {
     struct kv_server_address server = {0};
     server.port = 12345;
     assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
+    if (maintain_pool(ctx) == 1) {
+        fprintf(stderr, "Error while closing server\n");
+        return;
+    }
     while (0 <= pp_wait_completions(ctx, 1));
     pp_close_ctx(ctx);
 }
