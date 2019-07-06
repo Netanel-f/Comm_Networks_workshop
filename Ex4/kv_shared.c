@@ -278,7 +278,7 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
     return rem_dest;
 }
 
-tatic struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
+static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
                                            int rx_depth, int port,
                                            int use_event, int is_server) {
     struct pingpong_context *ctx;

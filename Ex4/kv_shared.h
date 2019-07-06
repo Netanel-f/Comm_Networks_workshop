@@ -48,6 +48,14 @@
 #define KILOBYTE_IN_BYTES 1024
 #define MEGABYTE_IN_BYTES 1048576
 
+
+typedef struct MEMORY_INFO {
+    struct ibv_mr * rndv_mr;
+    char rndv_buffer[MAX_TEST_SIZE];
+    struct MEMORY_INFO * next_mem;
+} MEMORY_INFO;
+
+
 enum packet_type {
     EAGER_GET_REQUEST,
     EAGER_GET_RESPONSE,
@@ -107,7 +115,8 @@ struct packet {
         } rndv_get_response;
 
         struct {
-            unsigned int key_len;
+//            unsigned int key_len;//todo add value len, and multi size bufs
+            unsigned int value_length;
             char key[0];
         } rndv_set_request;
 
@@ -116,9 +125,9 @@ struct packet {
             unsigned int server_key;
         } rndv_set_response;
 
-        struct {
-            unsigned int to_close;
-        } close_connection;
+//        struct {
+//            unsigned int to_close;
+//        } close_connection;
 
 #ifdef EX4
         struct {
