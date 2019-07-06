@@ -1,5 +1,6 @@
 #include "kv_shared.h"
 
+#define DEBUG true
 
 int g_argc;
 char **g_argv;
@@ -731,7 +732,7 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     /* Otherwise, use RENDEZVOUS - exercise part 2 */
     set_packet->type = RENDEZVOUS_SET_REQUEST;
     /* maybe already cached*/
-    if (strcmp(key, last_rndv_accessed_key) == 0) {
+    if ((last_rndv_accessed_key != NULL) && (strcmp(key, last_rndv_accessed_key) == 0)) {
         last_accesed_key_val_length = value_length;
         // set temp mr
         struct ibv_mr *orig_mr = ctx->mr;
@@ -758,14 +759,14 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     /* Sends the packet to the server */
     pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0);
 
+
+    /* wait for both to complete */
+    assert(pp_wait_completions(ctx, 2) == 0);
+    assert(set_packet->type == RENDEZVOUS_SET_RESPONSE);
     // set temp mr
     struct ibv_mr * orig_mr = ctx->mr;
     struct ibv_mr * temp_mr = ibv_reg_mr(ctx->pd, (void*)value, value_length + 1, IBV_ACCESS_LOCAL_WRITE |IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
     ctx->mr = temp_mr;
-
-    /* wait for both to complete */
-    assert(pp_wait_completions(ctx, 2));
-    assert(set_packet->type == RENDEZVOUS_SET_RESPONSE);
 
     /* update cache */
     strcpy(last_rndv_accessed_key, key);
@@ -810,6 +811,7 @@ int kv_get(void *kv_handle, const char *key, char **value) {
         switch (response_packet->type) {
 
             case EAGER_GET_RESPONSE:
+                if (DEBUG) { printf("EAGER_GET_RESPONSE\n"); }
                 value_len = response_packet->eager_get_response.value_length;
                 *value = (char *) malloc(value_len + 1);
                 memcpy(*value, response_packet->eager_get_response.value, value_len);
@@ -817,18 +819,19 @@ int kv_get(void *kv_handle, const char *key, char **value) {
                 break;
 
             case RENDEZVOUS_GET_RESPONSE:
+                if (DEBUG) { printf("RENDEZVOUS_GET_RESPONSE\n"); }
                 value_len = response_packet->rndv_get_response.value_length;
                 *value = calloc(value_len + 1, 1);
 
                 /* update cache */
-                strcpy(last_rndv_accessed_key, key);
+                memcpy(last_rndv_accessed_key, key, key_length + 1);
                 last_accesed_key_val_length = value_len;
-                last_accessed_server_addr = response_packet->rndv_set_response.server_ptr;
-                last_accessed_server_rkey = response_packet->rndv_set_response.server_key;
+                last_accessed_server_addr = response_packet->rndv_get_response.server_ptr;
+                last_accessed_server_rkey = response_packet->rndv_get_response.server_key;
 
                 // set temp mr
                 struct ibv_mr *orig_mr = ctx->mr;
-                struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) value, value_len + 1,
+                struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) *value, value_len + 1,
                                                     IBV_ACCESS_LOCAL_WRITE |
                                                     IBV_ACCESS_REMOTE_WRITE |
                                                     IBV_ACCESS_REMOTE_READ);
@@ -840,7 +843,6 @@ int kv_get(void *kv_handle, const char *key, char **value) {
                 int ret_value = pp_wait_completions(ctx, 1);
                 ctx->mr = orig_mr;
                 ibv_dereg_mr(temp_mr);
-
                 break;
 
             default:
@@ -1163,31 +1165,52 @@ int main(int argc, char **argv)
     /* Test small size */
     assert(100 < MAX_TEST_SIZE);
     memset(send_buffer, 'a', 100);
+    if (DEBUG) { printf("before set 1 aX100\n"); }
     assert(0 == set(kv_ctx, "1", send_buffer));
+    if (DEBUG) { printf("before get 1\n"); }
     assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("before strcmp 1\n"); }
     assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("before release 1\n"); }
     release(recv_buffer);
+    if (DEBUG) { printf("after release 1\n"); }
 
     /* Test logic */
+    if (DEBUG) { printf("before get 1 aX100\n"); }
     assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("before strcmp 2\n"); }
     assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("before release 2\n"); }
     release(recv_buffer);
+    if (DEBUG) { printf("after release 2\n"); }
     memset(send_buffer, 'b', 100);
+    if (DEBUG) { printf("before set 1 bX100\n"); }
     assert(0 == set(kv_ctx, "1", send_buffer));
     memset(send_buffer, 'c', 100);
+    if (DEBUG) { printf("before set 22 cX100\n"); }
     assert(0 == set(kv_ctx, "22", send_buffer));
     memset(send_buffer, 'b', 100);
+    if (DEBUG) { printf("before get 1 bx100\n"); }
     assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("before strcmp 3\n"); }
     assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("before release 3\n"); }
     release(recv_buffer);
+    if (DEBUG) { printf("after release 3\n"); }
 
     /* Test large size */
     memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
+    if (DEBUG) { printf("before set 1 aXBIG\n"); }
     assert(0 == set(kv_ctx, "1", send_buffer));
+    if (DEBUG) { printf("before set 333 aXBIG\n"); }
     assert(0 == set(kv_ctx, "333", send_buffer));
+    if (DEBUG) { printf("before get 1 eeee\n"); }
     assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("before strcmp 4\n"); }
     assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("before release 4\n"); }
     release(recv_buffer);
+    if (DEBUG) { printf("after release 4\n"); }
 
 
 #ifdef EX4

@@ -1,5 +1,5 @@
 #include "kv_shared.h"
-
+#define DEBUG true
 
 int g_argc;
 char **g_argv;
@@ -676,7 +676,8 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     KV_ENTRY * current_node = entries_head;
     unsigned int key_length;
     unsigned int value_length;
-
+    if (DEBUG) { printf("handle server type: %d\n", packet->type); }
+    printf("~~handle server type: %d\n", packet->type);
     switch (packet->type) {
 
         /* Only handle packets relevant to the server here - client will handle inside get/set() calls */
@@ -826,6 +827,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             }
 
             if (current_node == NULL) {
+                if (DEBUG) { printf("current node null\n"); }
                 /* key wasn't found in DB so we need to create it. */
                 KV_ENTRY * temp_node = (KV_ENTRY *) malloc(sizeof(KV_ENTRY));
                 temp_node->key = calloc(key_length, 1);
@@ -853,6 +855,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                 entries_counter++;
 
                 /* need to assign large memory */
+                if (DEBUG) { printf("need to assign large mem\n"); }
                 temp_node->large_val_mem_info = mem_pool_head;
                 mem_pool_head = mem_pool_head->next_mem;
                 temp_node->large_val_mem_info->next_mem = NULL;
@@ -866,6 +869,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
             break;
         case CLOSE_CONNECTION:
+            if (DEBUG) { printf("received CLOSE_CONNECTION packet\n"); }
             close_server = true;
             break;
 #ifdef EX4
@@ -876,6 +880,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     }
 
     if (response_size) {
+        if (DEBUG) { printf("response size %d\n", response_size); }
         pp_post_send(ctx, IBV_WR_SEND, response_size, NULL, NULL, 0);
     }
 }
@@ -895,8 +900,14 @@ int maintain_pool(struct pingpong_context *ctx) {
     }
 
     while (pool_size < MIN_POOL_NODES) {
-        mem_pool_tail->next_mem = (struct MEMORY_INFO *) malloc(sizeof(MEMORY_INFO));
-        mem_pool_tail = mem_pool_tail->next_mem;
+        if (pool_size == 0) {
+            mem_pool_head = (struct MEMORY_INFO *) malloc(sizeof(MEMORY_INFO));
+            mem_pool_tail = mem_pool_head;
+        } else {
+            mem_pool_tail->next_mem = (struct MEMORY_INFO *) malloc(sizeof(MEMORY_INFO));
+            mem_pool_tail = mem_pool_tail->next_mem;
+        }
+
         mem_pool_tail->next_mem = NULL;
         memset(mem_pool_tail->rndv_buffer, '\0', MAX_TEST_SIZE);
         mem_pool_tail->rndv_mr = ibv_reg_mr(ctx->pd, &(mem_pool_tail->rndv_buffer),
@@ -924,6 +935,7 @@ int clear_server_data() {
         free(mem_pool_head);
         mem_pool_head = temp;
     }
+    if (DEBUG) {printf("after mem_pool clean\n"); }
 
     while (tainted_mem_pool_head != NULL) {
         if (ibv_dereg_mr(tainted_mem_pool_head->rndv_mr)) {
@@ -934,16 +946,23 @@ int clear_server_data() {
         free(tainted_mem_pool_head);
         tainted_mem_pool_head = temp;
     }
+    if (DEBUG) {printf("after tainted_mem_pool clean\n"); }
 
     while (entries_head != NULL) {
-        if (ibv_dereg_mr(entries_head->large_val_mem_info->rndv_mr)) {
-            fprintf(stderr, "Couldn't deregister MR\n");
-            return 1;
+        if (entries_head->large_val_mem_info != NULL) {
+            if (ibv_dereg_mr(entries_head->large_val_mem_info->rndv_mr)) {
+                fprintf(stderr, "Couldn't deregister MR\n");
+                return 1;
+            }
+            free(entries_head->large_val_mem_info);
         }
+        free(entries_head->value);
+        free(entries_head->key);
         KV_ENTRY * temp = entries_head->next_entry;
         free(entries_head);
         entries_head = temp;
     }
+    if (DEBUG) {printf("after entries clean\n"); }
 
     return 0;
 }
@@ -981,6 +1000,7 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters) {
                     ++rcnt;
                     handle_server_packets_only(ctx, (struct packet*)ctx->buf);
                     if (close_server) {
+                        if (DEBUG) {printf("close_server = true\n"); }
                         if (clear_server_data() == 1) {
                             fprintf(stderr, "Error while closing server\n");
                         }
@@ -1010,11 +1030,14 @@ void run_server() {
     struct kv_server_address server = {0};
     server.port = 12345;
     assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
+    printf("AFTER origmain assert\n");
     if (maintain_pool(ctx) == 1) {
         fprintf(stderr, "Error while closing server\n");
         return;
     }
+    printf("AFTER RUNSRV-ORIG MAIN\n");
     while (0 <= pp_wait_completions(ctx, 1));
+    printf("AFTER RUNSRV-WAITCOMP\n");
     pp_close_ctx(ctx);
 }
 

@@ -12,20 +12,20 @@ TARFLAGS = -czvf
 TARNAME = 201209806.tar.gz
 TARSRCS = ${ALL} ${EXE} Makefile
 
-EXE = server client
+EXE = kv_server kv_client
 ALL = kv_server.c kv_client.c kv_shared.h README
 
 default: all
 
 all: ${EXE}
 
-server: kv_server.o
+kv_server: kv_server.o
 	$(CC) $(CFLAGS) -o kv_server kv_server.o
 
 kv_server.o: kv_server.c
 	$(CC) $(CFLAGS) -c kv_server.c
 
-client: kv_client.o
+kv_client: kv_client.o
 	$(CC) $(CFLAGS) -o kv_client kv_client.o
 
 kv_client.o: kv_client.c
