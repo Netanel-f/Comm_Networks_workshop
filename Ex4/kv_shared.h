@@ -159,11 +159,9 @@ struct pingpong_context {
     struct ibv_comp_channel *channel;
     struct ibv_pd		*pd;
     struct ibv_mr		*mr;
-    struct ibv_mr		*remote_mr;
     struct ibv_cq		*cq;
     struct ibv_qp		*qp;
     void			*buf;
-    void            *remote_buf;
     int			 size;
     int			 rx_depth;
     int          routs;
@@ -190,32 +188,32 @@ void wire_gid_to_gid(const char *wgid, union ibv_gid *gid);
 
 void gid_to_wire_gid(const union ibv_gid *gid, char wgid[]);
 
-static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
-                          enum ibv_mtu mtu, int sl,
-                          struct pingpong_dest *dest, int sgid_idx);
-
-static struct pingpong_dest *pp_client_exch_dest(const char *servername, int port,
-                                                 const struct pingpong_dest *my_dest);
-
-static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
-                                                 int ib_port, enum ibv_mtu mtu,
-                                                 int port, int sl,
-                                                 const struct pingpong_dest *my_dest,
-                                                 int sgid_idx);
-
-static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
-                                            int rx_depth, int port,
-                                            int use_event, int is_server);
-
-int pp_close_ctx(struct pingpong_context *ctx);
-
-static int pp_post_recv(struct pingpong_context *ctx, int n);
-
-static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key);
-
-static void usage(const char *argv0);
-
-int orig_main(struct kv_server_address *server, unsigned size, int argc, char *argv[], struct pingpong_context **result_ctx);
+//static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
+//                          enum ibv_mtu mtu, int sl,
+//                          struct pingpong_dest *dest, int sgid_idx);
+//
+//static struct pingpong_dest *pp_client_exch_dest(const char *servername, int port,
+//                                                 const struct pingpong_dest *my_dest);
+//
+//static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
+//                                                 int ib_port, enum ibv_mtu mtu,
+//                                                 int port, int sl,
+//                                                 const struct pingpong_dest *my_dest,
+//                                                 int sgid_idx);
+//
+//static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
+//                                            int rx_depth, int port,
+//                                            int use_event, int is_server);
+//
+//int pp_close_ctx(struct pingpong_context *ctx);
+//
+//static int pp_post_recv(struct pingpong_context *ctx, int n);
+//
+//static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key);
+//
+//static void usage(const char *argv0);
+//
+//int orig_main(struct kv_server_address *server, unsigned size, int argc, char *argv[], struct pingpong_context **result_ctx);
 
 //int pp_wait_completions(struct pingpong_context *ctx, int iters);
 
