@@ -2,9 +2,7 @@ CC = gcc
 CXX = g++
 
 INCS=-I.
-#CFLAGS = -Wall -std=c11 -libverbs -D _GNU_SOURCE
-CFLAGS = -std=c11 -libverbs -D _GNU_SOURCE
-#CFLAGS = -std=c11 -libverbs
+CFLAGS = -Wall -std=c11 -libverbs -D _GNU_SOURCE
 CXXFLAGS = -Wall -std=c++11 -g $(INCS)
 
 
