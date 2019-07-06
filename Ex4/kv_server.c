@@ -30,47 +30,6 @@ MEMORY_INFO * tainted_mem_pool_head = NULL;
 MEMORY_INFO * tainted_mem_pool_tail = NULL;
 int pool_size = 0;
 
-
-//struct KV_NODE {
-//    struct KV_NODE * next;
-//    struct KV_NODE * prev;
-//    unsigned int val_len;
-//    char key_and_value[0];
-//};
-//
-//struct RNDV_MEMORY_INFO {
-//    struct ibv_mr * rndv_mr;
-//    char rndv_buffer[MAX_TEST_SIZE];
-//    struct RNDV_MEMORY_INFO * next;
-//};
-//
-//struct RNDV_NODE {
-//    struct RNDV_NODE * next;
-//    struct RNDV_MEMORY_INFO * mem_info;
-//    unsigned int key_len;
-//    char key[0];
-//};
-
-//struct RNDV_CACHE_NODE {//todo check if needed
-//    struct RNDV_CACHE_NODE * next;
-//    uint64_t srv_addr;
-//    unsigned int srv_rkey;
-//    unsigned int val_len;
-//    unsigned int key_len;
-//    char key[0];
-//};
-
-//struct KV_NODE * kv_head = NULL;
-//struct KV_NODE * kv_tail = NULL;
-//int kv_nodes_counter = 0;
-
-///* server data structs for use */
-//struct RNDV_NODE * rndv_head = NULL;
-//struct RNDV_NODE * rndv_tail = NULL;
-//struct RNDV_MEMORY_INFO * rndv_pool_head = NULL;
-//struct RNDV_MEMORY_INFO * rndv_pool_tail = NULL;
-//int rndv_pool_nodes_counter = 0;
-
 bool close_server = false;
 
 
@@ -190,31 +149,6 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             break;
 
         case RENDEZVOUS_GET_REQUEST:
-//            key_length = packet->rndv_get_request.key_len;
-//
-//            /* couldn't find existing key  - create a (empty) node for it */
-//
-//            struct RNDV_NODE * rndv_tempGET = (struct RNDV_NODE *) malloc(sizeof(struct RNDV_NODE) + key_length + 1);
-//            rndv_tempGET->next = NULL;
-//            rndv_tempGET->mem_info = rndv_pool_head;
-//            rndv_pool_head = rndv_pool_head->next;
-//            rndv_pool_nodes_counter--;
-//            rndv_tempGET->mem_info->next = NULL;
-//            rndv_tempGET->key_len = key_length;
-//            strncpy(rndv_tempGET->key, packet->rndv_get_request.key, key_length);
-//            if (rndv_tail != NULL) {
-//                rndv_tail->next = rndv_tempGET;
-//                rndv_tail = rndv_tempGET;
-//            } else {
-//                rndv_head = rndv_tempGET;
-//                rndv_tail = rndv_tempGET;
-//            }
-//
-//            struct packet * response_packetGET = (struct packet*) ctx->buf;
-//            response_packetGET->type = RENDEZVOUS_GET_RESPONSE;
-//            response_packetGET->rndv_get_response.value_length = 1;
-//            response_packetGET->rndv_get_response.server_ptr = (uint64_t) rndv_tail->mem_info->rndv_mr->addr;
-//            response_packetGET->rndv_get_response.server_key = rndv_tail->mem_info->rndv_mr->rkey;
             break;
 
         case RENDEZVOUS_SET_REQUEST:
@@ -293,9 +227,9 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             }
 
             break;
-//        case CLOSE_CONNECTION:
-//            close_server = true;
-//            break;
+        case CLOSE_CONNECTION:
+            close_server = true;
+            break;
 #ifdef EX4
             case FIND: /* TODO (2LOC): use some hash function */
 #endif
@@ -306,6 +240,74 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     if (response_size) {
         pp_post_send(ctx, IBV_WR_SEND, response_size, NULL, NULL, 0);
     }
+}
+
+
+int maintain_pool(struct pingpong_context *ctx) {
+    while (tainted_mem_pool_head != NULL) {
+        memset(tainted_mem_pool_head->rndv_buffer, '\0', MAX_TEST_SIZE);
+        if (mem_pool_tail != NULL) {
+            mem_pool_tail->next_mem = tainted_mem_pool_head;
+        } else {
+            mem_pool_head = tainted_mem_pool_head;
+            mem_pool_tail = tainted_mem_pool_head;
+        }
+        pool_size++;
+        tainted_mem_pool_head = tainted_mem_pool_head->next_mem;
+    }
+
+    while (pool_size < MIN_POOL_NODES) {
+        mem_pool_tail->next_mem = (struct MEMORY_INFO *) malloc(sizeof(MEMORY_INFO));
+        mem_pool_tail = mem_pool_tail->next_mem;
+        mem_pool_tail->next_mem = NULL;
+        memset(mem_pool_tail->rndv_buffer, '\0', MAX_TEST_SIZE);
+        mem_pool_tail->rndv_mr = ibv_reg_mr(ctx->pd, &(mem_pool_tail->rndv_buffer),
+                                                     MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE |
+                                                                    IBV_ACCESS_REMOTE_WRITE |
+                                                                    IBV_ACCESS_REMOTE_READ);
+        if (!mem_pool_tail->rndv_mr) {
+            fprintf(stderr, "Couldn't register MR\n");
+            return 1;
+        }
+        pool_size++;
+    }
+
+    return 0;
+}
+
+int clear_server_data() {
+    /* deregister mr of structs */
+    while (mem_pool_head != NULL) {
+        if (ibv_dereg_mr(mem_pool_head->rndv_mr)) {
+            fprintf(stderr, "Couldn't deregister MR\n");
+            return 1;
+        }
+        struct MEMORY_INFO * temp = mem_pool_head->next_mem;
+        free(mem_pool_head);
+        mem_pool_head = temp;
+    }
+
+    while (tainted_mem_pool_head != NULL) {
+        if (ibv_dereg_mr(tainted_mem_pool_head->rndv_mr)) {
+            fprintf(stderr, "Couldn't deregister MR\n");
+            return 1;
+        }
+        struct MEMORY_INFO * temp = tainted_mem_pool_head->next_mem;
+        free(tainted_mem_pool_head);
+        tainted_mem_pool_head = temp;
+    }
+
+    while (entries_head != NULL) {
+        if (ibv_dereg_mr(entries_head->large_val_mem_info->rndv_mr)) {
+            fprintf(stderr, "Couldn't deregister MR\n");
+            return 1;
+        }
+        KV_ENTRY * temp = entries_head->next_entry;
+        free(entries_head);
+        entries_head = temp;
+    }
+
+    return 0;
 }
 
 int pp_wait_completions(struct pingpong_context *ctx, int iters) {
@@ -341,6 +343,9 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters) {
                     ++rcnt;
                     handle_server_packets_only(ctx, (struct packet*)ctx->buf);
                     if (close_server) {
+                        if (clear_server_data() == 1) {
+                            fprintf(stderr, "Error while closing server\n");
+                        }
                         return -1;
                     }
                     pp_post_recv(ctx, 1);
@@ -352,24 +357,11 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters) {
                     return 1;
             }
         }
-//        if (ctx->server) {
-//            while (rndv_pool_nodes_counter < MIN_POOL_NODES) {
-//                rndv_pool_tail->next = (struct RNDV_MEMORY_INFO *) malloc(
-//                        sizeof(struct RNDV_MEMORY_INFO));
-//                rndv_pool_tail = rndv_pool_tail->next;
-//                rndv_pool_tail->next = NULL;
-//                memset(rndv_pool_tail->rndv_buffer, '\0', MAX_TEST_SIZE);
-//                rndv_pool_tail->rndv_mr = ibv_reg_mr(ctx->pd, &(rndv_pool_tail->rndv_buffer),
-//                                                     MAX_TEST_SIZE, IBV_ACCESS_LOCAL_WRITE |
-//                                                                    IBV_ACCESS_REMOTE_WRITE |
-//                                                                    IBV_ACCESS_REMOTE_READ);
-//                if (!rndv_pool_tail->rndv_mr) {
-//                    fprintf(stderr, "Couldn't register MR\n");
-//                    return 1;
-//                }
-//                rndv_pool_nodes_counter++;
-//            }
-//        }
+
+        if (maintain_pool(ctx) == 1) {
+            fprintf(stderr, "Error while closing server\n");
+            return -1;
+        }
     }
     return 0;
 }

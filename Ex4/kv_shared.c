@@ -434,28 +434,6 @@ int pp_close_ctx(struct pingpong_context *ctx) {
         return 1;
     }
 
-    // deregister mr of structs
-    while (rndv_pool_head != NULL) {
-        if (ibv_dereg_mr(rndv_pool_head->rndv_mr)) {
-            fprintf(stderr, "Couldn't deregister MR\n");
-            return 1;
-        }
-        struct RNDV_MEMORY_INFO * temp = rndv_pool_head->next;
-        free(rndv_pool_head);
-        rndv_pool_head = temp;
-    }
-
-    while (rndv_head != NULL) {
-        if (ibv_dereg_mr(rndv_head->mem_info->rndv_mr)) {
-            fprintf(stderr, "Couldn't deregister MR\n");
-            return 1;
-        }
-        struct RNDV_NODE * temp = rndv_head->next;
-        free(rndv_head);
-        rndv_head = temp;
-    }
-
-
     if (ibv_dealloc_pd(ctx->pd)) {
         fprintf(stderr, "Couldn't deallocate PD\n");
         return 1;
