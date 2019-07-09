@@ -863,13 +863,13 @@ int kv_get(void *kv_handle, const char *key, char **value) {
 
         // set temp mr
         struct ibv_mr *orig_mr = ctx->mr;
-        struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) value, last_accessed_key_val_length + 1,
+        struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) *value, last_accessed_key_val_length + 1,
                                             IBV_ACCESS_LOCAL_WRITE |
                                             IBV_ACCESS_REMOTE_WRITE |
                                             IBV_ACCESS_REMOTE_READ);
         ctx->mr = temp_mr;
 
-        pp_post_send(ctx, IBV_WR_RDMA_READ, last_accessed_key_val_length + 1, *value,
+        pp_post_send(ctx, IBV_WR_RDMA_READ, last_accessed_key_val_length, *value,
                      (void *) last_accessed_server_addr,
                      last_accessed_server_rkey);
 
