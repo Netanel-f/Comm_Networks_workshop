@@ -687,6 +687,7 @@ unsigned long hash_key(unsigned char *str) {
 
 
 void handle_server_packets_only(struct pingpong_context *ctx, struct packet *packet) {
+    struct packet * response_packet = ctx->buf;
     unsigned response_size = 0;
     KV_ENTRY * current_node = entries_head;
     unsigned int key_length;
@@ -695,14 +696,13 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     if (DEBUG) { printf("handle server type: %d\n", packet->type); }
     printf("~~handle server type: %d\n", packet->type);
     switch (packet->type) {
-
         /* Only handle packets relevant to the server here - client will handle inside get/set() calls */
         case EAGER_GET_REQUEST:
 
             while (current_node != NULL) {
                 if (strcmp(current_node->key, packet->eager_get_request.key) == 0) {
                     /* found match */
-                    struct packet * response_packet = ctx->buf;
+//                    struct packet * response_packet = ctx->buf;
 
                     if (current_node->value != NULL) {
                         /* small value */
@@ -809,7 +809,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
         case RENDEZVOUS_SET_REQUEST:
             key_length = strlen(packet->rndv_set_request.key);
             value_length = packet->rndv_set_request.value_length;
-            struct packet * response_packet = ctx->buf;
+//            struct packet * response_packet = ctx->buf;
             while (current_node != NULL) {
                 /* looking if key already exists */
                 if (strcmp(current_node->key, packet->rndv_set_request.key) == 0) {
@@ -886,16 +886,19 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             }
 
             break;
+
         case CLOSE_CONNECTION:
             if (DEBUG) { printf("received CLOSE_CONNECTION packet\n"); }
             close_server = true;
             break;
 #ifdef EX4
-            case FIND: /* TODO (2LOC): use some hash function */
-                hash_value = hash_key((unsigned char *)packet->find.key);
-                hash_value = hash_value % (packet->find.num_of_servers);
-
-
+        case FIND: /* TODO (2LOC): use some hash function */
+            hash_value = hash_key((unsigned char *)packet->find.key);
+            hash_value = hash_value % (packet->find.num_of_servers);
+            response_packet->type = LOCATION;
+            response_packet->location.selected_server = hash_value;
+            response_size = sizeof(struct packet);
+            break;
 
 #endif
         default:
