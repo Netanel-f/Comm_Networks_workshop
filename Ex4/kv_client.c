@@ -805,12 +805,13 @@ int kv_get(void *kv_handle, const char *key, char **value) {
         get_packet->type = EAGER_GET_REQUEST;
         memcpy(get_packet->eager_get_request.key, key, key_length + 1);
 
+        /* Posts a receive-buffer for EAGER_GET_RESPONSE / RNDV_GET_RESPONSE */
+        pp_post_recv(ctx, 1);
         /* Sends the packet to the server */
         pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0);
         /* await EAGER_GET_REQUEST completion */
-        pp_wait_completions(ctx, 1);
-        /* await EAGER_GET_RESPONSE / RNDV_GET_RESPONSE completion */
-        pp_wait_completions(ctx, 1);
+        pp_wait_completions(ctx, 2);
+//        pp_wait_completions(ctx, 1);//todo delete
 
         struct packet *response_packet = (struct packet *) ctx->buf;
         unsigned int value_len;

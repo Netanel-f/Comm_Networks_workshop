@@ -881,7 +881,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     }
 
     if (response_size) {
-        if (DEBUG) { printf("response size %d\n", response_size); }
+        if (DEBUG) { printf("response size %d type %d\n", response_size, packet->type); }
         pp_post_send(ctx, IBV_WR_SEND, response_size, NULL, NULL, 0);
     }
 }
