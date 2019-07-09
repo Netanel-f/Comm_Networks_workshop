@@ -1083,7 +1083,7 @@ void print_results_to_file(FILE * results_file, ssize_t value_size, double throu
 }
 
 
-void run_throuput_tests(void *kv_ctx, FILE * results_file) {
+void run_throughput_tests(void *kv_ctx, FILE * results_file) {
     char send_buffer[MAX_TEST_SIZE] = {0};
     char *recv_buffer;
 
@@ -1093,7 +1093,8 @@ void run_throuput_tests(void *kv_ctx, FILE * results_file) {
     for (ssize_t value_size = 1; value_size < MAX_TEST_SIZE; value_size = value_size<< 1) {
         struct timeval start, end;
         double total_time_usec = 0.0;
-        int total_bytes = 0;
+//        int total_bytes = 0;
+        ssize_t total_bytes = 0;
         int total_attempts = 50;
         memset(send_buffer, 'a', value_size);
 
@@ -1107,15 +1108,21 @@ void run_throuput_tests(void *kv_ctx, FILE * results_file) {
             sprintf(key, "%ld-%d", value_size, attempt);
             set(kv_ctx, key, send_buffer);
             get(kv_ctx, key, &recv_buffer);
-            assert(0 == strcmp(send_buffer, recv_buffer));
+//            assert(0 == strcmp(send_buffer, recv_buffer));
 
-            total_bytes = total_bytes + 2 * (strlen(key) + 1 + value_size + packet_struct_size);
+//            total_bytes = total_bytes + 2 * (strlen(key) + 1 + value_size + packet_struct_size);
             release(recv_buffer);
         }
 
         if (gettimeofday(&end, NULL)) {
             perror("gettimeofday");
             break;
+        }
+
+        if (value_size < EAGER_PROTOCOL_LIMIT) {
+            total_bytes = total_attempts * 2 * (strlen(key) + 1 + value_size + 1) + 3 * packet_struct_size;
+        } else {
+            total_bytes = total_attempts * (strlen(key) + 1 + value_size + 2*packet_struct_size);
         }
 
         total_time_usec = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
@@ -1165,7 +1172,17 @@ int main(int argc, char **argv)
     /* Test throughput */
     FILE * results_file;
     results_file = fopen("RESULTS.txt", "w+");
-    run_throuput_tests(kv_ctx, results_file);
+    run_throughput_tests(kv_ctx, results_file);
+    fclose(results_file);
+
+    // Read contents from file
+    results_file = fopen("RESULTS.txt", "r");
+    char c = fgetc(results_file);
+    while (c != EOF)
+    {
+        printf ("%c", c);
+        c = fgetc(results_file);
+    }
     fclose(results_file);
 
 //    /* Test small size */
