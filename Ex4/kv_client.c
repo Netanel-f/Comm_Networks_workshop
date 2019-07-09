@@ -922,8 +922,7 @@ struct mkv_ctx {
 	struct pingpong_context *kv_ctxs[0];
 };
 
-int mkv_open(struct kv_server_address *servers, void **mkv_h)
-{
+int mkv_open(struct kv_server_address *servers, void **mkv_h) {
 	struct mkv_ctx *ctx;
 	unsigned count = 0;
 	while (servers[count++].servername); /* count servers */
@@ -943,25 +942,21 @@ int mkv_open(struct kv_server_address *servers, void **mkv_h)
 	return 0;
 }
 
-int mkv_set(void *mkv_h, unsigned kv_id, const char *key, const char *value)
-{
+int mkv_set(void *mkv_h, unsigned kv_id, const char *key, const char *value) {
 	struct mkv_ctx *ctx = mkv_h;
 	return kv_set(ctx->kv_ctxs[kv_id], key, value);
 }
 
-int mkv_get(void *mkv_h, unsigned kv_id, const char *key, char **value)
-{
+int mkv_get(void *mkv_h, unsigned kv_id, const char *key, char **value) {
 	struct mkv_ctx *ctx = mkv_h;
 	return kv_get(ctx->kv_ctxs[kv_id], key, value);
 }
 
-void mkv_release(char *value)
-{
+void mkv_release(char *value) {
 	kv_release(value);
 }
 
-void mkv_close(void *mkv_h)
-{
+void mkv_close(void *mkv_h) {
 	unsigned count;
 	struct mkv_ctx *ctx = mkv_h;
 	for (count = 0; count < ctx->num_servers; count++) {
@@ -985,8 +980,7 @@ struct dkv_ctx {
 
 int dkv_open(struct kv_server_address *servers, /* array of servers */
              struct kv_server_address *indexer, /* single indexer */
-             void **dkv_h)
-{
+             void **dkv_h) {
 	struct dkv_ctx *ctx = malloc(sizeof(*ctx));
 	if (orig_main(indexer, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx->indexer)) {
 		return 1;
@@ -997,8 +991,7 @@ int dkv_open(struct kv_server_address *servers, /* array of servers */
 	*dkv_h = ctx;
 }
 
-int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length)
-{
+int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length) {
 	struct dkv_ctx *ctx = dkv_h;
     struct packet *set_packet = (struct packet*)&ctx->indexer->buf;
     unsigned packet_size = strlen(key) + sizeof(struct packet);
@@ -1020,18 +1013,33 @@ int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length)
 		//length); /* TODO (10LOC): Add this value length parameter to all the relevant functions... including kv_set()/kv_get() */
 }
 
-int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length)
-{
+int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
 	/* TODO (20LOC): implement similarly to dkv_get() */
+    struct dkv_ctx *ctx = dkv_h;
+    struct packet *set_packet = (struct packet*)&ctx->indexer->buf;
+    unsigned packet_size = strlen(key) + sizeof(struct packet);
+
+    /* Step #1: The client sends the Index server FIND(key, #kv-servers) */
+    set_packet->type = FIND;
+    set_packet->find.num_of_servers = ctx->mkv->num_servers;
+    strcpy(set_packet->find.key, key);
+
+    pp_post_recv(ctx->indexer, 1); /* Posts a receive-buffer for LOCATION */
+    pp_post_send(ctx->indexer, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
+    assert(pp_wait_completions(ctx->indexer, 2)); /* wait for both to complete */
+
+    /* Step #2: The Index server responds with LOCATION(#kv-server-id) */
+    assert(set_packet->type == LOCATION);
+
+    /* Step #3: The client contacts KV-server with the ID returned in LOCATION, using SET/GET messages. */
+    return mkv_get(ctx->mkv, set_packet->location.selected_server, key, value);
 }
 
-void dkv_release(char *value)
-{
+void dkv_release(char *value) {
 	mkv_release(value);
 }
 
-int dkv_close(void *dkv_h)
-{
+int dkv_close(void *dkv_h) {
 	struct dkv_ctx *ctx = dkv_h;
 	pp_close_ctx(ctx->indexer);
 	mkv_close(ctx->mkv);
@@ -1170,75 +1178,75 @@ int main(int argc, char **argv)
     assert(0 == my_open(&servers[0], &kv_ctx));
 #endif
 
-    /* Test throughput */
-    FILE * results_file;
-    results_file = fopen("RESULTS.txt", "w+");
-    run_throughput_tests(kv_ctx, results_file);
-    fclose(results_file);
-
-    // Read contents from file
-    results_file = fopen("RESULTS.txt", "r");
-    char c = fgetc(results_file);
-    while (c != EOF)
-    {
-        printf ("%c", c);
-        c = fgetc(results_file);
-    }
-    fclose(results_file);
-
-//    /* Test small size */
-//    assert(100 < MAX_TEST_SIZE);
-//    memset(send_buffer, 'a', 100);
-//    if (DEBUG) { printf("before set 1 aX100\n"); }
-//    assert(0 == set(kv_ctx, "1", send_buffer));
-//    if (DEBUG) { printf("before get 1\n"); }
-//    assert(0 == get(kv_ctx, "1", &recv_buffer));
-//    if (DEBUG) { printf("before strcmp 1\n"); }
-//    assert(0 == strcmp(send_buffer, recv_buffer));
-//    if (DEBUG) { printf("before release 1\n"); }
-//    release(recv_buffer);
-//    if (DEBUG) { printf("after release 1\n"); }
+//    /* Test throughput */
+//    FILE * results_file;
+//    results_file = fopen("RESULTS.txt", "w+");
+//    run_throughput_tests(kv_ctx, results_file);
+//    fclose(results_file);
 //
-//    /* Test logic */
-//    if (DEBUG) { printf("before get 1 aX100\n"); }
-//    assert(0 == get(kv_ctx, "1", &recv_buffer));
-//    if (DEBUG) { printf("before strcmp 2\n"); }
-//    assert(0 == strcmp(send_buffer, recv_buffer));
-//    if (DEBUG) { printf("before release 2\n"); }
-//    release(recv_buffer);
-//    if (DEBUG) { printf("after release 2\n"); }
-//    memset(send_buffer, 'b', 100);
-//    if (DEBUG) { printf("before set 1 bX100\n"); }
-//    assert(0 == set(kv_ctx, "1", send_buffer));
-//    memset(send_buffer, 'c', 100);
-//    if (DEBUG) { printf("before set 22 cX100\n"); }
-//    assert(0 == set(kv_ctx, "22", send_buffer));
-//    memset(send_buffer, 'b', 100);
-//    if (DEBUG) { printf("before get 1 bx100\n"); }
-//    assert(0 == get(kv_ctx, "1", &recv_buffer));
-//    if (DEBUG) { printf("before strcmp 3\n"); }
-//    assert(0 == strcmp(send_buffer, recv_buffer));
-//    if (DEBUG) { printf("before release 3\n"); }
-//    release(recv_buffer);
-//    if (DEBUG) { printf("after release 3\n"); }
-//
-//    /* Test large size */
-//    memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
-//    if (DEBUG) { printf("before set 1 aXBIG\n"); }
-//    assert(0 == set(kv_ctx, "1", send_buffer));
-//    if (DEBUG) { printf("before set 333 aXBIG\n"); }
-//    assert(0 == set(kv_ctx, "333", send_buffer));
-//    if (DEBUG) { printf("before get 1 eeee\n"); }
-//    assert(0 == get(kv_ctx, "1", &recv_buffer));
-//    if (DEBUG) { printf("before strcmp 4\n"); }
-//    assert(0 == strcmp(send_buffer, recv_buffer));
-//    if (DEBUG) { printf("before release 4\n"); }
-//    release(recv_buffer);
-//    if (DEBUG) { printf("after release 4\n"); }
+//    // Read contents from file
+//    results_file = fopen("RESULTS.txt", "r");
+//    char c = fgetc(results_file);
+//    while (c != EOF)
+//    {
+//        printf ("%c", c);
+//        c = fgetc(results_file);
+//    }
+//    fclose(results_file);
+
+    /* Test small size */
+    assert(100 < MAX_TEST_SIZE);
+    memset(send_buffer, 'a', 100);
+    if (DEBUG) { printf("before set 1 aX100\n"); }
+    assert(0 == set(kv_ctx, "1", send_buffer));
+    if (DEBUG) { printf("before get 1\n"); }
+    assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("before strcmp 1\n"); }
+    assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("before release 1\n"); }
+    release(recv_buffer);
+    if (DEBUG) { printf("after release 1\n"); }
+
+    /* Test logic */
+    if (DEBUG) { printf("before get 1 aX100\n"); }
+    assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("before strcmp 2\n"); }
+    assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("before release 2\n"); }
+    release(recv_buffer);
+    if (DEBUG) { printf("after release 2\n"); }
+    memset(send_buffer, 'b', 100);
+    if (DEBUG) { printf("before set 1 bX100\n"); }
+    assert(0 == set(kv_ctx, "1", send_buffer));
+    memset(send_buffer, 'c', 100);
+    if (DEBUG) { printf("before set 22 cX100\n"); }
+    assert(0 == set(kv_ctx, "22", send_buffer));
+    memset(send_buffer, 'b', 100);
+    if (DEBUG) { printf("before get 1 bx100\n"); }
+    assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("before strcmp 3\n"); }
+    assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("before release 3\n"); }
+    release(recv_buffer);
+    if (DEBUG) { printf("after release 3\n"); }
+
+    /* Test large size */
+    memset(send_buffer, 'a', MAX_TEST_SIZE - 1);
+    if (DEBUG) { printf("before set 1 aXBIG\n"); }
+    assert(0 == set(kv_ctx, "1", send_buffer));
+    if (DEBUG) { printf("before set 333 aXBIG\n"); }
+    assert(0 == set(kv_ctx, "333", send_buffer));
+    if (DEBUG) { printf("before get 1 eeee\n"); }
+    assert(0 == get(kv_ctx, "1", &recv_buffer));
+    if (DEBUG) { printf("before strcmp 4\n"); }
+    assert(0 == strcmp(send_buffer, recv_buffer));
+    if (DEBUG) { printf("before release 4\n"); }
+    release(recv_buffer);
+    if (DEBUG) { printf("after release 4\n"); }
 
 
 #ifdef EX4
-//    recursive_fill_kv(TEST_LOCATION, kv_ctx);
+    recursive_fill_kv(TEST_LOCATION, kv_ctx);
 #endif
 
     my_close(kv_ctx);

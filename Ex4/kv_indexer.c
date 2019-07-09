@@ -894,10 +894,10 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 #ifdef EX4
         case FIND: /* TODO (2LOC): use some hash function */
             hash_value = hash_key((unsigned char *)packet->find.key);
-            hash_value = hash_value % (packet->find.num_of_servers);
             response_packet->type = LOCATION;
-            response_packet->location.selected_server = hash_value;
+            response_packet->location.selected_server = (unsigned int) hash_value % (packet->find.num_of_servers);
             response_size = sizeof(struct packet);
+//            response_size = sizeof(struct packet) + sizeof(unsigned int);//todo check if needed
             break;
 
 #endif
@@ -911,7 +911,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     }
 }
 
-
+//todo doesn't needed on indexer
 int maintain_pool(struct pingpong_context *ctx) {
     while (tainted_mem_pool_head != NULL) {
         memset(tainted_mem_pool_head->rndv_buffer, '\0', MAX_TEST_SIZE);

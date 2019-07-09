@@ -3,8 +3,8 @@
 #define COMM_NETS_KV_SHARED_H
 #define _GNU_SOURCE 1   // for compiling purposes
 #define DEBUG true      // for DEBUG purposes
-#define EX3
-//#define EX4
+//#define EX3
+#define EX4
 
 
 #include <assert.h>
