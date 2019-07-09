@@ -3,7 +3,7 @@ project(Comm_Nets)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_C_FLAGS -Wall -libverbs -D _GNU_SOURCE)
-set(CMAKE_CXX_FLAGS -Wall -libverbs -D _GNU_SOURCE)
+#set(CMAKE_CXX_FLAGS -Wall -libverbs -D _GNU_SOURCE)
 
 
 #set(CLIENT Ex1/client.cpp Ex1/shared.h)
@@ -36,9 +36,9 @@ set(CMAKE_CXX_FLAGS -Wall -libverbs -D _GNU_SOURCE)
 #set(EX3_TMP_SRC Ex3/kv_template.c)
 #add_executable(ex3template ${EX3_TMP_SRC})
 
-#set(EX4_SHARED_RESOURCES)
-set(EX4_CLIENT Ex4/kv_shared.c Ex4/kv_shared.h Ex4/kv_client.c)
-set(EX4_SERVER Ex4/kv_shared.h Ex4/kv_shared.c Ex4/kv_server.c)
+set(EX4_SHARED_RESOURCES)
+set(EX4_CLIENT Ex4/kv_client.c Ex4/kv_shared.h)
+set(EX4_SERVER Ex4/kv_server.c Ex4/kv_shared.c Ex4/kv_shared.h)
 set(EX4_INDEXER Ex4/kv_indexer.c Ex4/kv_shared.c Ex4/kv_shared.h)
 
 add_executable(ex4_client ${EX4_CLIENT})

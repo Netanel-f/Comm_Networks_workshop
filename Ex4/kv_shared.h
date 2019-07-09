@@ -34,6 +34,8 @@
 #include <sys/stat.h>
 #endif
 
+//#define _GNU_SOURCE
+
 
 #define EAGER_PROTOCOL_LIMIT (1 << 12) /* 4KB limit */
 #define MAX_TEST_SIZE (10 * EAGER_PROTOCOL_LIMIT)
@@ -157,11 +159,9 @@ struct pingpong_context {
     struct ibv_comp_channel *channel;
     struct ibv_pd		*pd;
     struct ibv_mr		*mr;
-    struct ibv_mr		*remote_mr;
     struct ibv_cq		*cq;
     struct ibv_qp		*qp;
     void			*buf;
-    void            *remote_buf;
     int			 size;
     int			 rx_depth;
     int          routs;
@@ -178,42 +178,89 @@ struct pingpong_dest {
     union ibv_gid gid;
 };
 
-enum ibv_mtu pp_mtu_to_enum(int mtu);
+enum ibv_mtu pp_mtu_to_enum(int mtu) {
+    switch (mtu) {
+        case 256:  return IBV_MTU_256;
+        case 512:  return IBV_MTU_512;
+        case 1024: return IBV_MTU_1024;
+        case 2048: return IBV_MTU_2048;
+        case 4096: return IBV_MTU_4096;
+        default:   return -1;
+    }
+}
 
-uint16_t pp_get_local_lid(struct ibv_context *context, int port);
 
-int pp_get_port_info(struct ibv_context *context, int port, struct ibv_port_attr *attr);
+uint16_t pp_get_local_lid(struct ibv_context *context, int port) {
+    struct ibv_port_attr attr;
 
-void wire_gid_to_gid(const char *wgid, union ibv_gid *gid);
+    if (ibv_query_port(context, port, &attr))
+        return 0;
 
-void gid_to_wire_gid(const union ibv_gid *gid, char wgid[]);
+    return attr.lid;
+}
 
-static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
-                          enum ibv_mtu mtu, int sl,
-                          struct pingpong_dest *dest, int sgid_idx);
 
-static struct pingpong_dest *pp_client_exch_dest(const char *servername, int port,
-                                                 const struct pingpong_dest *my_dest);
+int pp_get_port_info(struct ibv_context *context, int port, struct ibv_port_attr *attr) {
+    return ibv_query_port(context, port, attr);
+}
 
-static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
-                                                 int ib_port, enum ibv_mtu mtu,
-                                                 int port, int sl,
-                                                 const struct pingpong_dest *my_dest,
-                                                 int sgid_idx);
 
-static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
-                                            int rx_depth, int port,
-                                            int use_event, int is_server);
+void wire_gid_to_gid(const char *wgid, union ibv_gid *gid) {
+    char tmp[9];
+    uint32_t v32;
+    int i;
 
-int pp_close_ctx(struct pingpong_context *ctx);
+    for (tmp[8] = 0, i = 0; i < 4; ++i) {
+        memcpy(tmp, wgid + i * 8, 8);
+        sscanf(tmp, "%x", &v32);
+        *(uint32_t *)(&gid->raw[i * 4]) = ntohl(v32);
+    }
+}
 
-static int pp_post_recv(struct pingpong_context *ctx, int n);
 
-static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key);
+void gid_to_wire_gid(const union ibv_gid *gid, char wgid[]) {
+    int i;
 
-static void usage(const char *argv0);
+    for (i = 0; i < 4; ++i)
+        sprintf(&wgid[i * 8], "%08x", htonl(*(uint32_t *)(gid->raw + i * 4)));
+}
 
-int orig_main(struct kv_server_address *server, unsigned size, int argc, char *argv[], struct pingpong_context **result_ctx);
+//enum ibv_mtu pp_mtu_to_enum(int mtu);
+//
+//uint16_t pp_get_local_lid(struct ibv_context *context, int port);
+//
+//int pp_get_port_info(struct ibv_context *context, int port, struct ibv_port_attr *attr);
+//
+//void wire_gid_to_gid(const char *wgid, union ibv_gid *gid);
+//
+//void gid_to_wire_gid(const union ibv_gid *gid, char wgid[]);
+
+//static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
+//                          enum ibv_mtu mtu, int sl,
+//                          struct pingpong_dest *dest, int sgid_idx);
+//
+//static struct pingpong_dest *pp_client_exch_dest(const char *servername, int port,
+//                                                 const struct pingpong_dest *my_dest);
+//
+//static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
+//                                                 int ib_port, enum ibv_mtu mtu,
+//                                                 int port, int sl,
+//                                                 const struct pingpong_dest *my_dest,
+//                                                 int sgid_idx);
+//
+//static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
+//                                            int rx_depth, int port,
+//                                            int use_event, int is_server);
+//
+//int pp_close_ctx(struct pingpong_context *ctx);
+//
+//static int pp_post_recv(struct pingpong_context *ctx, int n);
+//
+//static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key);
+//
+//static void usage(const char *argv0);
+//
+//int orig_main(struct kv_server_address *server, unsigned size, int argc, char *argv[], struct pingpong_context **result_ctx);
 
 //int pp_wait_completions(struct pingpong_context *ctx, int iters);
 
