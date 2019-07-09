@@ -12,7 +12,7 @@ typedef struct KV_ENTRY{
     struct KV_ENTRY * prev_entry;
     struct KV_ENTRY * next_entry;
     unsigned int key_len;
-//    unsigned int val_len;
+//    unsigned int val_len;//todo
     MEMORY_INFO * large_val_mem_info; // for values of size > 4KB - use large memory.
     char * key;
     char * value; // NULL for values > 4KB.
