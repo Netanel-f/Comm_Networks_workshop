@@ -1,9 +1,8 @@
-//
-// Created by netanelf on 7/3/19.
-//
 
 #ifndef COMM_NETS_KV_SHARED_H
 #define COMM_NETS_KV_SHARED_H
+#define _GNU_SOURCE 1
+#define DEBUG true
 
 #include <assert.h>
 #include <stdio.h>
@@ -34,9 +33,9 @@
 #include <sys/stat.h>
 #endif
 
-//#define _GNU_SOURCE
 
 
+//// CONSTANTS
 #define EAGER_PROTOCOL_LIMIT (1 << 12) /* 4KB limit */
 #define MAX_TEST_SIZE (10 * EAGER_PROTOCOL_LIMIT)
 #define TEST_LOCATION "~/www/"
