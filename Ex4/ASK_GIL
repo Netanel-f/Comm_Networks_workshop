@@ -3,3 +3,7 @@
 
 2. Should I register memory on client every time in order for zero-copy.
    Or should I use one MR with MAX_TEST_SIZE and copy from-to
+
+
+complie nweb
+cc –O2  nweb.c –o nweb
