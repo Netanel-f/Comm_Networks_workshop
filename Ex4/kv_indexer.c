@@ -818,6 +818,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     packet->rndv_set_response.server_ptr = (uint64_t) current_node->large_val_mem_info->rndv_mr->addr;
                     packet->rndv_set_response.server_key = current_node->large_val_mem_info->rndv_mr->rkey;
                     response_size = sizeof(struct packet);
+                    if (DEBUG) { printf("REND response key: %s, server_addr %ld, server_rkey %d, value length %d\n", packet->rndv_set_request.key, packet->rndv_set_response.server_ptr, packet->rndv_set_response.server_key, value_length); }
                     break;
 
                 } else {
@@ -864,6 +865,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                 packet->rndv_set_response.server_ptr = (uint64_t) temp_node->large_val_mem_info->rndv_mr->addr;
                 packet->rndv_set_response.server_key = temp_node->large_val_mem_info->rndv_mr->rkey;
                 response_size = sizeof(struct packet);
+                if (DEBUG) { printf("REND response key: %s, server_addr %ld, server_rkey %d, value length %d\n", temp_node->key, packet->rndv_set_response.server_ptr, packet->rndv_set_response.server_key, value_length); }
             }
 
             break;
@@ -879,7 +881,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     }
 
     if (response_size) {
-        if (DEBUG) { printf("response size %d\n", response_size); }
+        if (DEBUG) { printf("response size %d type %d\n", response_size, packet->type); }
         pp_post_send(ctx, IBV_WR_SEND, response_size, NULL, NULL, 0);
     }
 }
@@ -1042,7 +1044,7 @@ void run_server() {
 
 
 int main(int argc, char **argv) {
-    void *kv_ctx; /* handle to internal KV-client context */
+//    void *kv_ctx; /* handle to internal KV-client context */
 //todo
 //    char send_buffer[MAX_TEST_SIZE] = {0};
 //    char *recv_buffer;
