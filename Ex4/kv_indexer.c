@@ -670,11 +670,28 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 }
 
 
+unsigned long hash_key(unsigned char *str) {
+    // djb2-this algorithm (k=33) was first reported by dan bernstein many years ago in comp.lang.c.
+    // another version of this algorithm (now favored by bernstein)
+    // uses xor: hash(i) = hash(i - 1) * 33 ^ str[i];
+    // the magic of number 33 (why it works better than many other constants, prime or not)
+    // has never been adequately explained.
+    unsigned long hash = 5381;
+    int c;
+
+    while (c = *str++)
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+    return hash;
+}
+
+
 void handle_server_packets_only(struct pingpong_context *ctx, struct packet *packet) {
     unsigned response_size = 0;
     KV_ENTRY * current_node = entries_head;
     unsigned int key_length;
     unsigned int value_length;
+    unsigned long hash_value;
     if (DEBUG) { printf("handle server type: %d\n", packet->type); }
     printf("~~handle server type: %d\n", packet->type);
     switch (packet->type) {
@@ -792,7 +809,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
         case RENDEZVOUS_SET_REQUEST:
             key_length = strlen(packet->rndv_set_request.key);
             value_length = packet->rndv_set_request.value_length;
-
+            struct packet * response_packet = ctx->buf;
             while (current_node != NULL) {
                 /* looking if key already exists */
                 if (strcmp(current_node->key, packet->rndv_set_request.key) == 0) {
@@ -814,9 +831,9 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 //                        current_node->val_len = value_length;
                     }
 
-                    packet->type = RENDEZVOUS_SET_RESPONSE;
-                    packet->rndv_set_response.server_ptr = (uint64_t) current_node->large_val_mem_info->rndv_mr->addr;
-                    packet->rndv_set_response.server_key = current_node->large_val_mem_info->rndv_mr->rkey;
+                    response_packet->type = RENDEZVOUS_SET_RESPONSE;
+                    response_packet->rndv_set_response.server_ptr = (uint64_t) current_node->large_val_mem_info->rndv_mr->addr;
+                    response_packet->rndv_set_response.server_key = current_node->large_val_mem_info->rndv_mr->rkey;
                     response_size = sizeof(struct packet);
                     if (DEBUG) { printf("REND response key: %s, server_addr %ld, server_rkey %d, value length %d\n", packet->rndv_set_request.key, packet->rndv_set_response.server_ptr, packet->rndv_set_response.server_key, value_length); }
                     break;
@@ -861,9 +878,9 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                 temp_node->large_val_mem_info->next_mem = NULL;
                 pool_size--;
 
-                packet->type = RENDEZVOUS_SET_RESPONSE;
-                packet->rndv_set_response.server_ptr = (uint64_t) temp_node->large_val_mem_info->rndv_mr->addr;
-                packet->rndv_set_response.server_key = temp_node->large_val_mem_info->rndv_mr->rkey;
+                response_packet->type = RENDEZVOUS_SET_RESPONSE;
+                response_packet->rndv_set_response.server_ptr = (uint64_t) temp_node->large_val_mem_info->rndv_mr->addr;
+                response_packet->rndv_set_response.server_key = temp_node->large_val_mem_info->rndv_mr->rkey;
                 response_size = sizeof(struct packet);
                 if (DEBUG) { printf("REND response key: %s, server_addr %ld, server_rkey %d, value length %d\n", temp_node->key, packet->rndv_set_response.server_ptr, packet->rndv_set_response.server_key, value_length); }
             }
@@ -875,6 +892,11 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             break;
 #ifdef EX4
             case FIND: /* TODO (2LOC): use some hash function */
+                hash_value = hash_key((unsigned char *)packet->find.key);
+                hash_value = hash_value % (packet->find.num_of_servers);
+
+
+
 #endif
         default:
             break;
