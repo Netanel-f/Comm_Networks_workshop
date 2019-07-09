@@ -1,7 +1,5 @@
 #include "kv_shared.h"
 
-#define DEBUG true
-
 int g_argc;
 char **g_argv;
 
