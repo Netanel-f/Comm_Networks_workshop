@@ -1,8 +1,11 @@
 
 #ifndef COMM_NETS_KV_SHARED_H
 #define COMM_NETS_KV_SHARED_H
-#define _GNU_SOURCE 1
-#define DEBUG true
+#define _GNU_SOURCE 1   // for compiling purposes
+#define DEBUG true      // for DEBUG purposes
+#define EX3
+//#define EX4
+
 
 #include <assert.h>
 #include <stdio.h>
@@ -23,8 +26,6 @@
 
 #include <infiniband/verbs.h>
 
-#define EX3
-//#define EX4
 
 #ifdef EX4
 #include <fcntl.h>
