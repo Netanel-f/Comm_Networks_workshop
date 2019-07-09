@@ -1,4 +1,5 @@
 1. How we should measure the throughput of each part?
    any specific details what sizes? only the value? environment specifications...
 
-2.
+2. Should I register memory on client every time in order for zero-copy.
+   Or should I use one MR with MAX_TEST_SIZE and copy from-to
