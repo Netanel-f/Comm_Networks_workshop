@@ -39,7 +39,7 @@ kv_indexer.o: kv_indexer.c
 	$(CC) $(CFLAGS) -c kv_indexer.c
 
 nweb: nweb23.c
-	$(CCA) -O2 nweb23.c -o nweb
+	$(CCA) -libverbs -O2 nweb23.c -o nweb
 
 
 .PHONY : clean
