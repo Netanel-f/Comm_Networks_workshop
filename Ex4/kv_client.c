@@ -527,10 +527,10 @@ int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** 
         usage(g_argv[0]);
         return 1;
     }
-    servers = malloc(2*sizeof(struct kv_server_address));
+    struct kv_server_address * temp_servers = malloc(2*sizeof(struct kv_server_address));
     temp_copy = strdup(g_argv[1]);
 
-    servers[0].servername = strtok(temp_copy, ":");
+    temp_servers[0].servername = strtok(temp_copy, ":");
     port_token = strtok(NULL, ":");
 
     if (port_token != NULL) {
@@ -538,15 +538,17 @@ int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** 
         if (port < 0 || port > 65535) {
             return 1;
         }
-        servers[0].port = port;
+        temp_servers[0].port = port;
     } else {
-        servers[0].port = DEFAULT_SRV_PORT;
+        temp_servers[0].port = DEFAULT_SRV_PORT;
     }
 
-    servers[0].servername = NULL;
-    servers[0].port = 0;
-    free(temp_copy);
+    temp_servers[1].servername = NULL;
+    temp_servers[1].port = 0;
 
+    *servers = temp_servers;
+//    free(temp_copy);
+    return 0;
 #endif
 }
 
@@ -1063,7 +1065,8 @@ void mkv_close(void *mkv_h) {
 	unsigned count;
 	struct mkv_ctx *ctx = mkv_h;
 	for (count = 0; count < ctx->num_servers; count++) {
-		pp_close_ctx((struct pingpong_context*)ctx->kv_ctxs[count]);
+//		pp_close_ctx((struct pingpong_context*)ctx->kv_ctxs[count]);
+        kv_close(ctx->kv_ctxs[count]);
 	}
 	free(ctx);
 }
@@ -1147,7 +1150,8 @@ void dkv_release(char *value) {
 
 int dkv_close(void *dkv_h) {
 	struct dkv_ctx *ctx = dkv_h;
-	pp_close_ctx(ctx->indexer);
+	kv_close(ctx->indexer);
+//	pp_close_ctx(ctx->indexer);
 	mkv_close(ctx->mkv);
 	free(ctx);
     return 0;//todo verify
@@ -1211,7 +1215,7 @@ void run_throughput_tests(void *kv_ctx, FILE * results_file) {
         double total_time_usec = 0.0;
 //        int total_bytes = 0;
         ssize_t total_bytes = 0;
-        int total_attempts = 50;
+        int total_attempts = THROUGHPUT_ATTEMPTS;
         memset(send_buffer, 'a', value_size);
 
         if (gettimeofday(&start, NULL)) {
@@ -1290,7 +1294,7 @@ int main(int argc, char **argv)
             servers[1].servername, servers[1].port); }
     assert(0 == my_open(servers, indexer, &kv_ctx));
 #else
-    assert (parse_args(NULL, servers) == 0);
+    assert (parse_args(NULL, &servers) == 0);
     assert(0 == my_open(&servers[0], &kv_ctx));
 #endif
 
