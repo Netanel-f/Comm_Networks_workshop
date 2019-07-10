@@ -1,4 +1,5 @@
 CC = gcc
+CCA = cc
 CXX = g++
 
 INCS=-I.
@@ -12,8 +13,8 @@ TARFLAGS = -czvf
 TARNAME = 201209806.tar.gz
 TARSRCS = ${ALL} ${EXE} Makefile
 
-EXE = kv_server kv_client kv_indexer
-ALL = kv_server.c kv_client.c kv_indexer.c kv_shared.h README
+EXE = kv_server kv_client kv_indexer nweb
+ALL = kv_server.c kv_client.c kv_indexer.c kv_shared.h README nweb32.c
 
 default: all
 
@@ -36,6 +37,9 @@ kv_indexer: kv_indexer.o
 
 kv_indexer.o: kv_indexer.c
 	$(CC) $(CFLAGS) -c kv_indexer.c
+
+nweb: nweb23.c
+	$(CCA) -O2 nweb23.c -o nweb
 
 
 .PHONY : clean
