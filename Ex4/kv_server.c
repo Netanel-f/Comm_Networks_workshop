@@ -691,12 +691,14 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     if (current_node->value != NULL) {
                         /* small value */
                         response_packet->type = EAGER_GET_RESPONSE;
+                        printf("current_node->val_len %d\n", current_node->val_len);
                         response_packet->eager_get_response.value_length = current_node->val_len;
 //                        response_packet->eager_get_response.value_length = strlen(current_node->value);
 //                        memcpy(response_packet->eager_get_response.value, current_node->value, current_node->val_len + 1);
-                        memcpy(response_packet->eager_get_response.value, current_node->value, strlen(current_node->value) + 1);
-                        response_size = sizeof(struct packet) + strlen(current_node->value);
-//                        response_size = sizeof(struct packet) + current_node->val_len;
+                        memcpy(response_packet->eager_get_response.value, current_node->value, current_node->val_len);
+//                        memcpy(response_packet->eager_get_response.value, current_node->value, strlen(current_node->value) + 1);
+//                        response_size = sizeof(struct packet) + strlen(current_node->value);
+                        response_size = sizeof(struct packet) + current_node->val_len;
 
                     } else {
                         ///* need to response with RNDV */
