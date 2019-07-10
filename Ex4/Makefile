@@ -12,8 +12,8 @@ TARFLAGS = -czvf
 TARNAME = 201209806.tar.gz
 TARSRCS = ${ALL} ${EXE} Makefile
 
-EXE = kv_server kv_client
-ALL = kv_server.c kv_client.c kv_shared.h README
+EXE = kv_server kv_client kv_indexer
+ALL = kv_server.c kv_client.c kv_indexer.c kv_shared.h README
 
 default: all
 
@@ -31,7 +31,7 @@ kv_client: kv_client.o
 kv_client.o: kv_client.c
 	$(CC) $(CFLAGS) -c kv_client.c
 
-indexer: kv_indexer.o
+kv_indexer: kv_indexer.o
 	$(CC) $(CFLAGS) -o kv_indexer kv_indexer.o
 
 kv_indexer.o: kv_indexer.c
