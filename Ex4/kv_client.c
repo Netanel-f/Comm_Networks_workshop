@@ -433,10 +433,17 @@ static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode,
 
 
 static void usage(const char *argv0) {
+#ifdef EX4
+    printf("Usage:\n");
+    printf("  %s <kv_indexer-host> <kv_server#1-host> ... ... <kv_server#N-host>     connect to indexer at <indexer-host>  and #n servers\n", argv0);
+    printf("     and use the default port set in kv_shared header file.\n");
+    printf("  %s <kv_indexer-host:port> <kv_server#1-host:port> ... ... <kv_server#N-host:port>     connect to indexer at <indexer-host>  and #n servers\n", argv0);
+    printf("     and override the default port set in kv_shared header file.\n");
+    printf("\n");
+#else
     printf("Usage:\n");
     printf("  %s            start a server and wait for connection\n", argv0);
     printf("  %s <host>     connect to server at <host>\n", argv0);
-    printf("\n");
     printf("Options:\n");
     printf("  -p, --port=<port>      listen on/connect to port <port> (default 18515)\n");
     printf("  -d, --ib-dev=<dev>     use IB device <dev> (default first device found)\n");
@@ -448,6 +455,99 @@ static void usage(const char *argv0) {
     printf("  -l, --sl=<sl>          service level value\n");
     printf("  -e, --events           sleep on CQ events (default poll)\n");
     printf("  -g, --gid-idx=<gid index> local port gid index\n");
+#endif
+}
+
+
+int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** servers) {
+    char * temp_copy;
+    char * port_token;
+    int port;
+#ifdef EX4
+    // indexer-hostname<:port> server-hostname<:port>, port is optional
+    if (g_argc < 3) {
+        usage(g_argv[0]);
+        return 1;
+    }
+    if(DEBUG) { printf("parse args before malloc\n"); }
+    struct kv_server_address * temp_indexer = (struct kv_server_address *) malloc(sizeof(struct kv_server_address));
+    struct kv_server_address * temp_servers = (struct kv_server_address *) malloc((g_argc - 1) * sizeof(struct kv_server_address));
+    if(DEBUG) { printf("parse args after malloc\n"); }
+
+    // indexer
+    temp_copy = strdup(g_argv[1]);
+    if(DEBUG) { printf("parse args - after strdup\n"); }
+    temp_indexer->servername = strtok(temp_copy, ":");
+    if(DEBUG) { printf("parse args - after strtok\n"); }
+    port_token = strtok(NULL, ":");
+    if (port_token != NULL) {
+        port = atoi(port_token);
+        if (port < 0 || port > 65535) {
+            return 1;
+        }
+        temp_indexer->port = port;
+    } else {
+        temp_indexer->port = DEFAULT_IDX_PORT;
+    }
+    if(DEBUG) { printf("parse args - after indexer\n"); }
+    // servers
+    for (int arg_idx = 2; arg_idx < g_argc; arg_idx++) {
+        temp_copy = strdup(g_argv[arg_idx]);
+        if(DEBUG) { printf("parse args - after strdup argidx%d\n", arg_idx); }
+        temp_servers[arg_idx-2].servername = strtok(temp_copy, ":");
+        if(DEBUG) { printf("parse args - after strtok servername %s\n", temp_servers[arg_idx-2].servername); }
+
+        port_token = strtok(NULL, ":");
+        if (port_token != NULL) {
+            port = strtol(port_token, NULL, 0);
+            if (port < 0 || port > 65535) {
+                return 1;
+            }
+            temp_servers[arg_idx-2].port = port;
+        } else {
+            temp_servers[arg_idx-2].port = DEFAULT_SRV_PORT;
+        }
+        if(DEBUG) { printf("parse args - before free\n"); }
+        if(DEBUG) { printf("parse args - after strtok servername %s\n", temp_servers[arg_idx-2].servername); }
+//        free(temp_copy);
+        if(DEBUG) { printf("parse args - after free\n"); }
+        if(DEBUG) { printf("parse args - after strtok servername %s\n", temp_servers[arg_idx-2].servername); }
+    }
+
+    if(DEBUG) { printf("parse args - before last line\n"); }
+    temp_servers[g_argc-2].servername = NULL;
+    temp_servers[g_argc-2].port = 0;
+    *indexer = temp_indexer;
+    *servers = temp_servers;
+    if(DEBUG) { printf("parse args - after last line\n"); }
+    return 0;
+#else
+    // server-hostname<:port>, port is optional
+    if (g_argc < 2) {
+        usage(g_argv[0]);
+        return 1;
+    }
+    servers = malloc(2*sizeof(struct kv_server_address));
+    temp_copy = strdup(g_argv[1]);
+
+    servers[0].servername = strtok(temp_copy, ":");
+    port_token = strtok(NULL, ":");
+
+    if (port_token != NULL) {
+        port = strtol(port_token, NULL, 0);
+        if (port < 0 || port > 65535) {
+            return 1;
+        }
+        servers[0].port = port;
+    } else {
+        servers[0].port = DEFAULT_SRV_PORT;
+    }
+
+    servers[0].servername = NULL;
+    servers[0].port = 0;
+    free(temp_copy);
+
+#endif
 }
 
 
@@ -475,92 +575,92 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 
     srand48(getpid() * time(NULL));
 
-    while (1) {
-        int c;
-
-        static struct option long_options[] = {
-                { .name = "port",     .has_arg = 1, .val = 'p' },
-                { .name = "ib-dev",   .has_arg = 1, .val = 'd' },
-                { .name = "ib-port",  .has_arg = 1, .val = 'i' },
-                { .name = "size",     .has_arg = 1, .val = 's' },
-                { .name = "mtu",      .has_arg = 1, .val = 'm' },
-                { .name = "rx-depth", .has_arg = 1, .val = 'r' },
-                { .name = "iters",    .has_arg = 1, .val = 'n' },
-                { .name = "sl",       .has_arg = 1, .val = 'l' },
-                { .name = "events",   .has_arg = 0, .val = 'e' },
-                { .name = "gid-idx",  .has_arg = 1, .val = 'g' },
-                { 0 }
-        };
-
-        c = getopt_long(argc, argv, "p:d:i:s:m:r:n:l:eg:", long_options, NULL);
-        if (c == -1)
-            break;
-
-        switch (c) {
-            case 'p':
-                port = strtol(optarg, NULL, 0);
-                if (port < 0 || port > 65535) {
-                    usage(argv[0]);
-                    return 1;
-                }
-                break;
-
-            case 'd':
-                ib_devname = strdup(optarg);
-                break;
-
-            case 'i':
-                ib_port = strtol(optarg, NULL, 0);
-                if (ib_port < 0) {
-                    usage(argv[0]);
-                    return 1;
-                }
-                break;
-
-            case 's':
-                size = strtol(optarg, NULL, 0);
-                break;
-
-            case 'm':
-                mtu = pp_mtu_to_enum(strtol(optarg, NULL, 0));
-                if (mtu < 0) {
-                    usage(argv[0]);
-                    return 1;
-                }
-                break;
-
-            case 'r':
-                rx_depth = strtol(optarg, NULL, 0);
-                break;
-
-            case 'n':
-                iters = strtol(optarg, NULL, 0);
-                break;
-
-            case 'l':
-                sl = strtol(optarg, NULL, 0);
-                break;
-
-            case 'e':
-                ++use_event;
-                break;
-
-            case 'g':
-                gidx = strtol(optarg, NULL, 0);
-                break;
-
-            default:
-                usage(argv[0]);
-                return 1;
-        }
-    }
-
-    if (optind == argc - 1)
-        servername = strdup(argv[optind]);
-    else if (optind < argc) {
-        usage(argv[0]);
-        return 1;
-    }
+//    while (1) {
+//        int c;
+//
+//        static struct option long_options[] = {
+//                { .name = "port",     .has_arg = 1, .val = 'p' },
+//                { .name = "ib-dev",   .has_arg = 1, .val = 'd' },
+//                { .name = "ib-port",  .has_arg = 1, .val = 'i' },
+//                { .name = "size",     .has_arg = 1, .val = 's' },
+//                { .name = "mtu",      .has_arg = 1, .val = 'm' },
+//                { .name = "rx-depth", .has_arg = 1, .val = 'r' },
+//                { .name = "iters",    .has_arg = 1, .val = 'n' },
+//                { .name = "sl",       .has_arg = 1, .val = 'l' },
+//                { .name = "events",   .has_arg = 0, .val = 'e' },
+//                { .name = "gid-idx",  .has_arg = 1, .val = 'g' },
+//                { 0 }
+//        };
+//
+//        c = getopt_long(argc, argv, "p:d:i:s:m:r:n:l:eg:", long_options, NULL);
+//        if (c == -1)
+//            break;
+//
+//        switch (c) {
+//            case 'p':
+//                port = strtol(optarg, NULL, 0);
+//                if (port < 0 || port > 65535) {
+//                    usage(argv[0]);
+//                    return 1;
+//                }
+//                break;
+//
+//            case 'd':
+//                ib_devname = strdup(optarg);
+//                break;
+//
+//            case 'i':
+//                ib_port = strtol(optarg, NULL, 0);
+//                if (ib_port < 0) {
+//                    usage(argv[0]);
+//                    return 1;
+//                }
+//                break;
+//
+//            case 's':
+//                size = strtol(optarg, NULL, 0);
+//                break;
+//
+//            case 'm':
+//                mtu = pp_mtu_to_enum(strtol(optarg, NULL, 0));
+//                if (mtu < 0) {
+//                    usage(argv[0]);
+//                    return 1;
+//                }
+//                break;
+//
+//            case 'r':
+//                rx_depth = strtol(optarg, NULL, 0);
+//                break;
+//
+//            case 'n':
+//                iters = strtol(optarg, NULL, 0);
+//                break;
+//
+//            case 'l':
+//                sl = strtol(optarg, NULL, 0);
+//                break;
+//
+//            case 'e':
+//                ++use_event;
+//                break;
+//
+//            case 'g':
+//                gidx = strtol(optarg, NULL, 0);
+//                break;
+//
+//            default:
+//                usage(argv[0]);
+//                return 1;
+//        }
+//    }
+//
+//    if (optind == argc - 1)
+//        servername = strdup(argv[optind]);
+//    else if (optind < argc) {
+//        usage(argv[0]);
+//        return 1;
+//    }
 
     page_size = sysconf(_SC_PAGESIZE);
 
@@ -926,13 +1026,16 @@ int mkv_open(struct kv_server_address *servers, void **mkv_h) {
 	struct mkv_ctx *ctx;
 	unsigned count = 0;
 	while (servers[count++].servername); /* count servers */
+
+
 	ctx = malloc(sizeof(*ctx) + count * sizeof(void*));
 	if (!ctx) {
 		return 1;
 	}
-
 	ctx->num_servers = count;
+	ctx->num_servers = count-1;
 	for (count = 0; count < ctx->num_servers; count++) {
+	    if (DEBUG) { printf("connecting to \'%s\' port %d\n", servers[count].servername, servers[count].port); }
 		if (orig_main(&servers[count], EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx->kv_ctxs[count])) {
 			return 1;
 		}
@@ -989,11 +1092,12 @@ int dkv_open(struct kv_server_address *servers, /* array of servers */
 		return 1;
 	}
 	*dkv_h = ctx;
+	return 0;//todo verify
 }
 
 int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length) {
 	struct dkv_ctx *ctx = dkv_h;
-    struct packet *set_packet = (struct packet*)&ctx->indexer->buf;
+    struct packet *set_packet = (struct packet*)ctx->indexer->buf;
     unsigned packet_size = strlen(key) + sizeof(struct packet);
 
     /* Step #1: The client sends the Index server FIND(key, #kv-servers) */
@@ -1003,9 +1107,10 @@ int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length) {
 
     pp_post_recv(ctx->indexer, 1); /* Posts a receive-buffer for LOCATION */
     pp_post_send(ctx->indexer, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
-    assert(pp_wait_completions(ctx->indexer, 2)); /* wait for both to complete */
+    assert(pp_wait_completions(ctx->indexer, 2) == 0); /* wait for both to complete */
 
     /* Step #2: The Index server responds with LOCATION(#kv-server-id) */
+    if (DEBUG) {printf("packet type: %d\n", set_packet->type); }
     assert(set_packet->type == LOCATION);
 
     /* Step #3: The client contacts KV-server with the ID returned in LOCATION, using SET/GET messages. */
@@ -1013,10 +1118,11 @@ int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length) {
 		//length); /* TODO (10LOC): Add this value length parameter to all the relevant functions... including kv_set()/kv_get() */
 }
 
+//int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
 int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
 	/* TODO (20LOC): implement similarly to dkv_get() */
     struct dkv_ctx *ctx = dkv_h;
-    struct packet *set_packet = (struct packet*)&ctx->indexer->buf;
+    struct packet *set_packet = (struct packet*)ctx->indexer->buf;
     unsigned packet_size = strlen(key) + sizeof(struct packet);
 
     /* Step #1: The client sends the Index server FIND(key, #kv-servers) */
@@ -1026,7 +1132,7 @@ int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
 
     pp_post_recv(ctx->indexer, 1); /* Posts a receive-buffer for LOCATION */
     pp_post_send(ctx->indexer, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
-    assert(pp_wait_completions(ctx->indexer, 2)); /* wait for both to complete */
+    assert(pp_wait_completions(ctx->indexer, 2) == 0); /* wait for both to complete */
 
     /* Step #2: The Index server responds with LOCATION(#kv-server-id) */
     assert(set_packet->type == LOCATION);
@@ -1044,6 +1150,7 @@ int dkv_close(void *dkv_h) {
 	pp_close_ctx(ctx->indexer);
 	mkv_close(ctx->mkv);
 	free(ctx);
+    return 0;//todo verify
 }
 
 #define my_open    dkv_open
@@ -1151,48 +1258,57 @@ int main(int argc, char **argv)
     char send_buffer[MAX_TEST_SIZE] = {0};
     char *recv_buffer;
 
-    struct kv_server_address servers[2] = {
-            {
-                    .servername = "localhost",
-                    .port = 12345
-            },
-            {0}
-    };
+//    struct kv_server_address servers[2] = {
+//            {
+//                    .servername = "localhost",
+//                    .port = 12345
+//            },
+//            {0}
+//    };
 
 #ifdef EX4
-    struct kv_server_address indexer[2] = {
-            {
-                    .servername = "localhost",
-                    .port = 12346
-            },
-            {0}
-    };
+//    struct kv_server_address indexer[2] = {
+//            {
+//                    .servername = "localhost",
+//                    .port = 12346
+//            },
+//            {0}
+//    };
 #endif
 
     g_argc = argc;
     g_argv = argv;
+    struct kv_server_address * servers = NULL;
+    struct kv_server_address * indexer = NULL;
 
 #ifdef EX4
-        assert(0 == my_open(servers, indexer, &kv_ctx));
+    if(DEBUG) { printf("before parse args\n"); }
+    assert (parse_args(&indexer, &servers) == 0);
+    if(DEBUG) { printf("before my_open %s-%d\t%s-%d\t%s-%d\n",
+            indexer->servername, indexer->port,
+            servers[0].servername, servers[0].port,
+            servers[1].servername, servers[1].port); }
+    assert(0 == my_open(servers, indexer, &kv_ctx));
 #else
+    assert (parse_args(NULL, servers) == 0);
     assert(0 == my_open(&servers[0], &kv_ctx));
 #endif
 
-//    /* Test throughput */
-//    FILE * results_file;
-//    results_file = fopen("RESULTS.txt", "w+");
-//    run_throughput_tests(kv_ctx, results_file);
-//    fclose(results_file);
-//
-//    // Read contents from file
-//    results_file = fopen("RESULTS.txt", "r");
-//    char c = fgetc(results_file);
-//    while (c != EOF)
-//    {
-//        printf ("%c", c);
-//        c = fgetc(results_file);
-//    }
-//    fclose(results_file);
+    /* Test throughput */
+    FILE * results_file;
+    results_file = fopen("RESULTS.txt", "w+");
+    run_throughput_tests(kv_ctx, results_file);
+    fclose(results_file);
+
+    // Read contents from file
+    results_file = fopen("RESULTS.txt", "r");
+    char c = fgetc(results_file);
+    while (c != EOF)
+    {
+        printf ("%c", c);
+        c = fgetc(results_file);
+    }
+    fclose(results_file);
 
     /* Test small size */
     assert(100 < MAX_TEST_SIZE);
@@ -1246,7 +1362,7 @@ int main(int argc, char **argv)
 
 
 #ifdef EX4
-    recursive_fill_kv(TEST_LOCATION, kv_ctx);
+//    recursive_fill_kv(TEST_LOCATION, kv_ctx);
 #endif
 
     my_close(kv_ctx);

@@ -3,6 +3,7 @@
 #define COMM_NETS_KV_SHARED_H
 #define _GNU_SOURCE 1   // for compiling purposes
 #define DEBUG true      // for DEBUG purposes
+//#define DEBUG false      // for DEBUG purposes
 //#define EX3
 #define EX4
 
@@ -37,6 +38,8 @@
 
 
 //// CONSTANTS
+#define DEFAULT_SRV_PORT 12345
+#define DEFAULT_IDX_PORT 12346
 #define EAGER_PROTOCOL_LIMIT (1 << 12) /* 4KB limit */
 #define MAX_TEST_SIZE (10 * EAGER_PROTOCOL_LIMIT)
 #define TEST_LOCATION "~/www/"

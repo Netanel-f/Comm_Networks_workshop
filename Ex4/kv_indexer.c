@@ -679,7 +679,7 @@ unsigned long hash_key(unsigned char *str) {
     unsigned long hash = 5381;
     int c;
 
-    while (c = *str++)
+    while ((c = *str++))
         hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 
     return hash;
@@ -893,10 +893,12 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             break;
 #ifdef EX4
         case FIND: /* TODO (2LOC): use some hash function */
+            if (DEBUG) { printf("received FIND\n"); }
             hash_value = hash_key((unsigned char *)packet->find.key);
             response_packet->type = LOCATION;
             response_packet->location.selected_server = (unsigned int) hash_value % (packet->find.num_of_servers);
             response_size = sizeof(struct packet);
+            if (DEBUG) { printf("received FIND response size %d\n", response_size); }
 //            response_size = sizeof(struct packet) + sizeof(unsigned int);//todo check if needed
             break;
 
@@ -1054,7 +1056,8 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters) {
 void run_server() {
     struct pingpong_context *ctx;
     struct kv_server_address server = {0};
-    server.port = 12345;
+//    server.port = 12345;
+    server.port = DEFAULT_IDX_PORT;
     assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
     printf("AFTER origmain assert\n");
     if (maintain_pool(ctx) == 1) {

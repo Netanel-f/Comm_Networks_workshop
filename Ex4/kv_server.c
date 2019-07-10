@@ -1030,7 +1030,8 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters) {
 void run_server() {
     struct pingpong_context *ctx;
     struct kv_server_address server = {0};
-    server.port = 12345;
+//    server.port = 12345;
+    server.port = DEFAULT_SRV_PORT;
     assert(0 == orig_main(&server, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx));
     printf("AFTER origmain assert\n");
     if (maintain_pool(ctx) == 1) {
