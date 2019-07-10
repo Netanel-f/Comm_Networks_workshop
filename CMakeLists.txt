@@ -41,10 +41,12 @@ set(EX4_SHARED_RESOURCES)
 set(EX4_CLIENT Ex4/kv_client.c Ex4/kv_shared.h)
 set(EX4_SERVER Ex4/kv_server.c Ex4/kv_shared.h)
 set(EX4_INDEXER Ex4/kv_indexer.c Ex4/kv_shared.h)
+set(EX4_WEB Ex4/nweb23.c Ex4/kv_shared.h)
 
 add_executable(ex4_client ${EX4_CLIENT})
 add_executable(ex4_server ${EX4_SERVER})
 add_executable(ex4_indexer ${EX4_INDEXER})
+add_executable(ex4_web ${EX4_WEB})
 
 target_link_libraries(ex4_client -libverbs)
 target_link_libraries(ex4_server -libverbs)
