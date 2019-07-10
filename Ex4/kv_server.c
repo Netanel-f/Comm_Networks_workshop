@@ -12,7 +12,7 @@ typedef struct KV_ENTRY{
     struct KV_ENTRY * prev_entry;
     struct KV_ENTRY * next_entry;
     unsigned int key_len;
-//    unsigned int val_len;//todo
+    unsigned int val_len;//todo
     MEMORY_INFO * large_val_mem_info; // for values of size > 4KB - use large memory.
     char * key;
     char * value; // NULL for values > 4KB.
@@ -691,8 +691,8 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     if (current_node->value != NULL) {
                         /* small value */
                         response_packet->type = EAGER_GET_RESPONSE;
-//                        response_packet->eager_get_response.value_length = current_node->val_len;
-                        response_packet->eager_get_response.value_length = strlen(current_node->value);
+                        response_packet->eager_get_response.value_length = current_node->val_len;
+//                        response_packet->eager_get_response.value_length = strlen(current_node->value);
 //                        memcpy(response_packet->eager_get_response.value, current_node->value, current_node->val_len + 1);
                         memcpy(response_packet->eager_get_response.value, current_node->value, strlen(current_node->value) + 1);
                         response_size = sizeof(struct packet) + strlen(current_node->value);
@@ -701,8 +701,8 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     } else {
                         ///* need to response with RNDV */
                         response_packet->type = RENDEZVOUS_GET_RESPONSE;
-//                        response_packet->rndv_get_response.value_length = current_node->val_len;
-                        response_packet->rndv_get_response.value_length = strlen(current_node->large_val_mem_info->rndv_buffer);
+                        response_packet->rndv_get_response.value_length = current_node->val_len;
+//                        response_packet->rndv_get_response.value_length = strlen(current_node->large_val_mem_info->rndv_buffer);
                         response_packet->rndv_get_response.server_ptr = (uint64_t) current_node->large_val_mem_info->rndv_mr->addr;
                         response_packet->rndv_get_response.server_key = current_node->large_val_mem_info->rndv_mr->rkey;
                         response_size = sizeof(struct packet);
@@ -724,7 +724,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
         case EAGER_SET_REQUEST:
             key_length = strlen(packet->eager_set_request.key_and_value);
-            value_length = strlen(&packet->eager_set_request.key_and_value[key_length + 1]);
+            value_length = packet->eager_set_request.value_length;
 
             while (current_node != NULL) {
                 /* looking if key already exists */
@@ -742,14 +742,18 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                             tainted_mem_pool_tail = current_node->large_val_mem_info;
                         }
                         current_node->large_val_mem_info = NULL;
-//                        current_node->val_len = value_length;
+                        current_node->val_len = value_length;
+                        if (DEBUG) { printf("calloc 1Start\n"); }
                         current_node->value = (char *) calloc(value_length, 1);
+                        if (DEBUG) { printf("calloc 1 end\n"); }
 
-//                    } else if (current_node->val_len != value_length) {
-                    } else if (strlen(current_node->value) != value_length) {
+                    } else if (current_node->val_len != value_length) {
+//                    } else if (strlen(current_node->value) != value_length) {
                         free(current_node->value);
+                        if (DEBUG) { printf("calloc 2 Start\n"); }
                         current_node->value = (char *) calloc(value_length, 1);
-//                        current_node->val_len = value_length;
+                        if (DEBUG) { printf("calloc 2 end\n"); }
+                        current_node->val_len = value_length;
                     }
 
                     memcpy(current_node->value, &packet->eager_set_request.key_and_value[key_length+1], value_length);
@@ -767,12 +771,12 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                 temp_node->value = calloc(value_length, 1);
 
                 strcpy(temp_node->key, packet->eager_set_request.key_and_value);
-                strcpy(temp_node->value, &packet->eager_set_request.key_and_value[key_length + 1]);
+                memcpy(temp_node->value, &packet->eager_set_request.key_and_value[key_length + 1], value_length);
 
                 /* fix pointers */
                 temp_node->next_entry = NULL;
                 temp_node->key_len = key_length;
-//                temp_node->val_len = value_length;
+                temp_node->val_len = value_length;
                 temp_node->large_val_mem_info = NULL;
                 if (entries_tail == NULL) {
                     temp_node->prev_entry = NULL;
@@ -800,7 +804,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     /* found match */
                     if (current_node->large_val_mem_info == NULL) {
                         /* need to assign large memory */
-//                        current_node->val_len = value_length;
+                        current_node->val_len = value_length;
                         current_node->large_val_mem_info = mem_pool_head;
                         mem_pool_head = mem_pool_head->next_mem;
                         current_node->large_val_mem_info->next_mem = NULL;
@@ -812,7 +816,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
 
                     } else {
                         /* a large mem already exists */
-//                        current_node->val_len = value_length;
+                        current_node->val_len = value_length;
                     }
 
                     response_packet->type = RENDEZVOUS_SET_RESPONSE;
@@ -841,7 +845,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                 /* fix pointers */
                 temp_node->next_entry = NULL;
                 temp_node->key_len = key_length;
-//                temp_node->val_len = value_length;
+                temp_node->val_len = value_length;
                 if (entries_tail == NULL) {
                     temp_node->prev_entry = NULL;
                     entries_head = temp_node;

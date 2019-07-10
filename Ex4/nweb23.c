@@ -284,6 +284,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 
     ctx->context = ibv_open_device(ib_dev);
     if (!ctx->context) {
+        if(DEBUG) { printf("ib_dev: %s, port:%d\n", ib_dev->dev_name, port); } //todo delete
         fprintf(stderr, "Couldn't get context for %s\n",
                 ibv_get_device_name(ib_dev));
         return NULL;
@@ -486,8 +487,8 @@ int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** 
     int port;
 #ifdef EX4
     // indexer-hostname<:port> server-hostname<:port>, port is optional
-    if (g_argc < 3) {
-        usage(g_argv[0]);
+    if (g_argc < 2) {
+        usage("nweb");
         return 1;
     }
     if(DEBUG) { printf("parse args before malloc\n"); }
@@ -496,10 +497,10 @@ int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** 
     if(DEBUG) { printf("parse args after malloc\n"); }
 
     // indexer
-    temp_copy = strdup(g_argv[1]);
+    temp_copy = strdup(g_argv[0]);
     if(DEBUG) { printf("parse args - after strdup\n"); }
     temp_indexer->servername = strtok(temp_copy, ":");
-    if(DEBUG) { printf("parse args - after strtok\n"); }
+    if(DEBUG) { printf("parse args - after strtok. indexer: %s\n", temp_indexer->servername); }
     port_token = strtok(NULL, ":");
     if (port_token != NULL) {
         port = atoi(port_token);
@@ -512,11 +513,11 @@ int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** 
     }
     if(DEBUG) { printf("parse args - after indexer\n"); }
     // servers
-    for (int arg_idx = 2; arg_idx < g_argc; arg_idx++) {
+    for (int arg_idx = 1; arg_idx < g_argc; arg_idx++) {
         temp_copy = strdup(g_argv[arg_idx]);
         if(DEBUG) { printf("parse args - after strdup argidx%d\n", arg_idx); }
-        temp_servers[arg_idx-2].servername = strtok(temp_copy, ":");
-        if(DEBUG) { printf("parse args - after strtok servername %s\n", temp_servers[arg_idx-2].servername); }
+        temp_servers[arg_idx-1].servername = strtok(temp_copy, ":");
+        if(DEBUG) { printf("parse args - after strtok servername %s\n", temp_servers[arg_idx-1].servername); }
 
         port_token = strtok(NULL, ":");
         if (port_token != NULL) {
@@ -524,20 +525,15 @@ int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** 
             if (port < 0 || port > 65535) {
                 return 1;
             }
-            temp_servers[arg_idx-2].port = port;
+            temp_servers[arg_idx-1].port = port;
         } else {
-            temp_servers[arg_idx-2].port = DEFAULT_SRV_PORT;
+            temp_servers[arg_idx-1].port = DEFAULT_SRV_PORT;
         }
-        if(DEBUG) { printf("parse args - before free\n"); }
-        if(DEBUG) { printf("parse args - after strtok servername %s\n", temp_servers[arg_idx-2].servername); }
-//        free(temp_copy);
-        if(DEBUG) { printf("parse args - after free\n"); }
-        if(DEBUG) { printf("parse args - after strtok servername %s\n", temp_servers[arg_idx-2].servername); }
     }
 
     if(DEBUG) { printf("parse args - before last line\n"); }
-    temp_servers[g_argc-2].servername = NULL;
-    temp_servers[g_argc-2].port = 0;
+    temp_servers[g_argc-1].servername = NULL;
+    temp_servers[g_argc-1].port = 0;
     *indexer = temp_indexer;
     *servers = temp_servers;
     if(DEBUG) { printf("parse args - after last line\n"); }
@@ -710,7 +706,7 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
             return 1;
         }
     }
-
+    if(DEBUG) { printf("srvname %s ||| ib_dev: %s, port:%d\n", servername, ib_dev->dev_name, port); } //todo delete
     ctx = pp_init_ctx(ib_dev, size, rx_depth, ib_port, use_event, !servername);
     if (!ctx)
         return 1;
@@ -825,15 +821,15 @@ int kv_open(struct kv_server_address *server, void **kv_handle) {
 }
 
 
-int kv_set(void *kv_handle, const char *key, const char *value) {
+int kv_set(void *kv_handle, const char *key, const char *value, unsigned length) {
     struct pingpong_context *ctx = kv_handle;
     struct packet *set_packet = (struct packet*)ctx->buf;
 
     unsigned key_length = strlen(key);
-    unsigned value_length = strlen(value);
-    unsigned packet_size = key_length + value_length + sizeof(struct packet) + 2;
+    unsigned value_length = length;
+    unsigned packet_size = key_length + 1 + value_length + sizeof(struct packet);
 
-    if (DEBUG) { printf("kv_set key %s value %s\n", key, value); }
+    if (DEBUG) { printf("kv_set key %s value %s length %d\n", key, value, length); }
 
     if (packet_size < EAGER_PROTOCOL_LIMIT) {
 //        if (DEBUG) { printf("EAGER_SET_REQUEST\n"); }
@@ -845,8 +841,8 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
         /* Eager protocol - exercise part 1 */
         set_packet->type = EAGER_SET_REQUEST;
         memcpy(set_packet->eager_set_request.key_and_value, key, key_length + 1);
-        memcpy(&set_packet->eager_set_request.key_and_value[key_length + 1], value, value_length + 1);
-
+        memcpy(&set_packet->eager_set_request.key_and_value[key_length + 1], value, value_length);
+        set_packet->eager_set_request.value_length = value_length;
         /* Sends the packet to the server */
         pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0);
 
@@ -878,7 +874,7 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     }
 
     packet_size = key_length + 1 + sizeof(struct packet);
-    set_packet->rndv_set_request.value_length = value_length + 1;
+    set_packet->rndv_set_request.value_length = value_length;
     memcpy(set_packet->rndv_set_request.key, key, key_length + 1);
 
     /* Posts a receive-buffer for RENDEZVOUS_SET_RESPONSE */
@@ -892,7 +888,7 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     assert(set_packet->type == RENDEZVOUS_SET_RESPONSE);
     // set temp mr
     struct ibv_mr * orig_mr = ctx->mr;
-    struct ibv_mr * temp_mr = ibv_reg_mr(ctx->pd, (void*)value, value_length + 1, IBV_ACCESS_LOCAL_WRITE |IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+    struct ibv_mr * temp_mr = ibv_reg_mr(ctx->pd, (void*)value, value_length, IBV_ACCESS_LOCAL_WRITE |IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
     ctx->mr = temp_mr;
 
     /* update cache */
@@ -901,17 +897,20 @@ int kv_set(void *kv_handle, const char *key, const char *value) {
     last_accessed_server_addr = set_packet->rndv_set_response.server_ptr;
     last_accessed_server_rkey = set_packet->rndv_set_response.server_key;
 
-    if (DEBUG) { printf("REND set key response from server: %s, server_addr %ld, server_rkey %d\n", last_rndv_accessed_key, last_accessed_server_addr, last_accessed_server_rkey); }
+    if (DEBUG) { printf("1REND set key response from server: %s, server_addr %ld, server_rkey %d\n", last_rndv_accessed_key, last_accessed_server_addr, last_accessed_server_rkey); }
 
-    pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length + 1, value, (void *)set_packet->rndv_set_response.server_ptr, set_packet->rndv_set_response.server_key);
+    pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length, value, (void *)set_packet->rndv_set_response.server_ptr, set_packet->rndv_set_response.server_key);
+    if (DEBUG) { printf("2REND set key response from server: %s, server_addr %ld, server_rkey %d\n", last_rndv_accessed_key, last_accessed_server_addr, last_accessed_server_rkey); }
     int ret_value = pp_wait_completions(ctx, 1);
+    if (DEBUG) { printf("3REND set key response from server: %s, server_addr %ld, server_rkey %d\n", last_rndv_accessed_key, last_accessed_server_addr, last_accessed_server_rkey); }
     ctx->mr = orig_mr;
     ibv_dereg_mr(temp_mr);
+    if (DEBUG) { printf("4REND set key response from server: %s, server_addr %ld, server_rkey %d\n", last_rndv_accessed_key, last_accessed_server_addr, last_accessed_server_rkey); }
     return ret_value;
 }
 
 
-int kv_get(void *kv_handle, const char *key, char **value) {
+int kv_get(void *kv_handle, const char *key, char **value, unsigned *length) {
     struct pingpong_context *ctx = kv_handle;
     unsigned int key_length = strlen(key);
     struct packet * get_packet = (struct packet*)ctx->buf;
@@ -943,14 +942,27 @@ int kv_get(void *kv_handle, const char *key, char **value) {
             case EAGER_GET_RESPONSE:
                 if (DEBUG) { printf("kv_get key %s, EAGER_GET_RESPONSE\n", key); }
                 value_len = response_packet->eager_get_response.value_length;
+                if (DEBUG) {
+                    if (length == NULL)
+                        printf("kv_get  NULL *length %d\n", *length);
+                    else
+                        printf("kv_get *length %p\n", length);
+                }
+
+                *length = value_len;
+                if (DEBUG) { printf("kv_get after assign *length %d\n", *length); }
                 *value = (char *) malloc(value_len + 1);
+                if (DEBUG) { printf("kv_get before memcpy \n"); }
                 memcpy(*value, response_packet->eager_get_response.value, value_len);
+                if (DEBUG) { printf("kv_get before memset \n"); }
                 memset(&((*value)[value_len]), '\0', 1);
+                if (DEBUG) { printf("kv_get before break \n"); }
                 break;
 
             case RENDEZVOUS_GET_RESPONSE:
                 if (DEBUG) { printf("kv_get key %s, RENDEZVOUS_GET_RESPONSE\n", key); }
                 value_len = response_packet->rndv_get_response.value_length;
+                *length = value_len;
                 *value = calloc(value_len + 1, 1);
 
                 /* update cache */
@@ -1061,15 +1073,15 @@ int mkv_open(struct kv_server_address *servers, void **mkv_h) {
 }
 
 
-int mkv_set(void *mkv_h, unsigned kv_id, const char *key, const char *value) {
+int mkv_set(void *mkv_h, unsigned kv_id, const char *key, const char *value, unsigned length) {
     struct mkv_ctx *ctx = mkv_h;
-    return kv_set(ctx->kv_ctxs[kv_id], key, value);
+    return kv_set(ctx->kv_ctxs[kv_id], key, value, length);
 }
 
 
-int mkv_get(void *mkv_h, unsigned kv_id, const char *key, char **value) {
+int mkv_get(void *mkv_h, unsigned kv_id, const char *key, char **value, unsigned *length) {
     struct mkv_ctx *ctx = mkv_h;
-    return kv_get(ctx->kv_ctxs[kv_id], key, value);
+    return kv_get(ctx->kv_ctxs[kv_id], key, value, length);
 }
 
 
@@ -1099,7 +1111,9 @@ int dkv_open(struct kv_server_address *servers, /* array of servers */
              struct kv_server_address *indexer, /* single indexer */
              void **dkv_h) {
     struct dkv_ctx *ctx = malloc(sizeof(*ctx));
+    if(DEBUG) { printf("dkv_open indexer: %s : %d\n", indexer->servername, indexer->port); }
     if (orig_main(indexer, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx->indexer)) {
+        if(DEBUG) { printf("ERRdkv_open indexer: %s : %d\n", indexer->servername, indexer->port); }
         return 1;
     }
     if (mkv_open(servers, (void**)&ctx->mkv)) {
@@ -1118,7 +1132,7 @@ int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length) {
     /* Step #1: The client sends the Index server FIND(key, #kv-servers) */
     set_packet->type = FIND;
     set_packet->find.num_of_servers = ctx->mkv->num_servers;
-    strcpy(set_packet->find.key, key);
+    memcpy(set_packet->find.key, key, strlen(key));
 
     pp_post_recv(ctx->indexer, 1); /* Posts a receive-buffer for LOCATION */
     pp_post_send(ctx->indexer, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
@@ -1129,8 +1143,9 @@ int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length) {
     assert(set_packet->type == LOCATION);
 
     /* Step #3: The client contacts KV-server with the ID returned in LOCATION, using SET/GET messages. */
-    return mkv_set(ctx->mkv, set_packet->location.selected_server, key, value);
-    //length); /* TODO (10LOC): Add this value length parameter to all the relevant functions... including kv_set()/kv_get() */
+//    return mkv_set(ctx->mkv, set_packet->location.selected_server, key, value);
+    return mkv_set(ctx->mkv, set_packet->location.selected_server, key, value, length);
+    /* TODO (10LOC): Add this value length parameter to all the relevant functions... including kv_set()/kv_get() */
 }
 
 
@@ -1144,7 +1159,7 @@ int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
     /* Step #1: The client sends the Index server FIND(key, #kv-servers) */
     set_packet->type = FIND;
     set_packet->find.num_of_servers = ctx->mkv->num_servers;
-    strcpy(set_packet->find.key, key);
+    memcpy(set_packet->find.key, key, strlen(key));
 
     pp_post_recv(ctx->indexer, 1); /* Posts a receive-buffer for LOCATION */
     pp_post_send(ctx->indexer, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
@@ -1154,7 +1169,8 @@ int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
     assert(set_packet->type == LOCATION);
 
     /* Step #3: The client contacts KV-server with the ID returned in LOCATION, using SET/GET messages. */
-    return mkv_get(ctx->mkv, set_packet->location.selected_server, key, value);
+//    return mkv_get(ctx->mkv, set_packet->location.selected_server, key, value);
+    return mkv_get(ctx->mkv, set_packet->location.selected_server, key, value, length);
 }
 
 
@@ -1174,9 +1190,11 @@ int dkv_close(void *dkv_h) {
 
 
 void recursive_fill_kv(char const* dirname, void *dkv_h) {
+    if (DEBUG) { printf("recursive_fill_kv dir: %s\n", dirname); }
     struct dirent *curr_ent;
     DIR* dirp = opendir(dirname);
     if (dirp == NULL) {
+        printf("recursive_fill_kv couldn't open dir: %s\nZ", dirname);
         return;
     }
 
@@ -1187,18 +1205,21 @@ void recursive_fill_kv(char const* dirname, void *dkv_h) {
             strcpy(path, dirname);
             strcat(path, "/");
             strcat(path, curr_ent->d_name);
+
             if (curr_ent->d_type == DT_DIR) {
                 recursive_fill_kv(path, dkv_h);
+
             } else if (curr_ent->d_type == DT_REG) {
                 int fd = open(path, O_RDONLY);
                 size_t fsize = lseek(fd, (size_t)0, SEEK_END);
                 void *p = mmap(0, fsize, PROT_READ, MAP_PRIVATE, fd, 0);
                 /* TODO (1LOC): Add a print here to see you found the full paths... */
-                printf("dkv_set path: %s, file size: %ld", path, fsize);
+                printf("dkv_set path: %s, file size: %ld\n", path, fsize);
                 dkv_set(dkv_h, path, p, fsize);
                 munmap(p, fsize);
                 close(fd);
             }
+
             free(path);
         }
     }
@@ -1257,7 +1278,7 @@ void logger(int type, char *s1, char *s2, int socket_fd)
 }
 
 /* this is a child web server process, so we can exit on errors */
-void web(int fd, int hit)
+void web(int fd, int hit, char * dir_path)
 {
 	int j, file_fd, buflen;
 	long i, ret, len;
@@ -1311,27 +1332,46 @@ void web(int fd, int hit)
 //	      (void)lseek(file_fd, (off_t)0, SEEK_SET); /* lseek back to the file start ready for reading */
 //          (void)sprintf(buffer,"HTTP/1.1 200 OK\nServer: nweb/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", VERSION, len, fstr); /* Header + a blank line */
 //	logger(LOG,"Header",buffer,hit);
+//    (void)write(fd,buffer,strlen(buffer));
+//
+//    /* send file in 8KB block - last block may be smaller */
+//    while (	(ret = read(file_fd, buffer, BUFSIZE)) > 0 ) {
+//        (void)write(fd,buffer,ret);
+//    }
+//    sleep(1);	/* allow socket to drain before signalling the socket is closed */
+//    close(fd);
+//    exit(1);
 
 
     ////TODO DKV_GET code
     unsigned int file_length;
-    char * key = (char *) malloc((strlen(&buffer[5]) + ))
-    char * value;
-    if (dkv_get(kv_ctx, &buffer[5], &value, len) != 0) {
-        //todo
-        logger(LOG, "DKV_GET", &buffer[5], hit);
+    size_t dir_path_len = strlen(dir_path);
+    size_t buffer_len = strlen(&buffer[5]);
+    char * key = (char *) calloc((strlen(&buffer[5]) + dir_path_len + 2), 1);
+    memcpy(key, dir_path, dir_path_len);
+//    key[dir_path_len] = '/';
+    memcpy(&key[dir_path_len+1], &buffer[5], buffer_len+1);
+//    memset(&key[dir_path_len], '/', 1);
+
+    char * value = (char *) malloc(MAX_TEST_SIZE);
+    if (dkv_get(kv_ctx, &buffer[5], &value, &file_length) != 0) {
+        logger(LOG, "DKV_GET", buffer, hit);
     }
-    (void)sprintf(buffer,"HTTP/1.1 200 OK\nServer: nweb/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", VERSION, len, value); /* Header + a blank line */
+
+    len = file_length;
+    free(key);
+
+    (void)sprintf(buffer,"HTTP/1.1 200 OK\nServer: nweb/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", VERSION, len, fstr); /* Header + a blank line */
     logger(LOG,"Header",buffer,hit);
-    ////DKV_GET code
 
 
-    (void)write(fd,buffer,strlen(buffer));
-
-	/* send file in 8KB block - last block may be smaller */
-	while (	(ret = read(file_fd, buffer, BUFSIZE)) > 0 ) {
-		(void)write(fd,buffer,ret);
-	}
+    (void)write(fd, buffer, strlen(buffer));
+    (void)write(fd, value ,file_length);
+    free(value);
+//	/* send file in 8KB block - last block may be smaller */
+//	while (	(ret = read(file_fd, buffer, BUFSIZE)) > 0 ) {
+//		(void)write(fd,buffer,ret);
+//	}
 	sleep(1);	/* allow socket to drain before signalling the socket is closed */
 	close(fd);
 	exit(1);
@@ -1345,9 +1385,10 @@ void web(int fd, int hit)
  * @return 0 if initialized client successfully, 1 otherwise.
  */
 void * init_dkvs_client(int argc, char **argv) {
+    if (DEBUG) { printf("init_dkvs_client \n"); }
     void * kv_ctx; /* handle to internal KV-client context */
-    g_argc = argc - 2;
-    g_argv = &argv[2];
+    g_argc = argc - 3;
+    g_argv = &argv[3];
 
     struct kv_server_address * servers = NULL;
     struct kv_server_address * indexer = NULL;
@@ -1364,8 +1405,10 @@ int main(int argc, char **argv)
 	static struct sockaddr_in cli_addr; /* static = initialised to zeros */
 	static struct sockaddr_in serv_addr; /* static = initialised to zeros */
 
-	if( argc < 3  || argc > 3 || !strcmp(argv[1], "-?") ) {
-		(void)printf("hint: nweb Port-Number Top-Directory\t\tversion %d\n\n"
+//	if( argc < 3  || argc > 3 || !strcmp(argv[1], "-?") ) {
+//		(void)printf("hint: nweb Port-Number Top-Directory\t\tversion %d\n\n"
+    if( argc < 3 ) {//todo
+		(void)printf("hint: nweb Port-Number Top-Directory <indexer> <server>...<server>\t\tversion %d\n\n"
 	"\tnweb is a small and very safe mini web server\n"
 	"\tnweb only servers out file/web pages with extensions named below\n"
 	"\t and only from the named directory or its sub-directories.\n"
@@ -1397,17 +1440,18 @@ int main(int argc, char **argv)
     kv_ctx = init_dkvs_client(argc, argv);
 	assert(kv_ctx != NULL);
 
-    recursive_fill_kv(TEST_LOCATION, kv_ctx);
+//    recursive_fill_kv(TEST_LOCATION, kv_ctx);
+    recursive_fill_kv(argv[2], kv_ctx);//todo
     //// end of init dkvs client & fill_kv
 
-	/* Become deamon + unstopable and no zombies children (= no wait()) */
-	if(fork() != 0)
-		return 0; /* parent returns OK to shell */
-	(void)signal(SIGCLD, SIG_IGN); /* ignore child death */
-	(void)signal(SIGHUP, SIG_IGN); /* ignore terminal hangups */
-	for(i=0;i<32;i++)
-		(void)close(i);		/* close open files */
-	(void)setpgrp();		/* break away from process group */
+//	/* Become deamon + unstopable and no zombies children (= no wait()) */
+//	if(fork() != 0)
+//		return 0; /* parent returns OK to shell */
+//	(void)signal(SIGCLD, SIG_IGN); /* ignore child death */
+//	(void)signal(SIGHUP, SIG_IGN); /* ignore terminal hangups */
+//	for(i=0;i<32;i++)
+//		(void)close(i);		/* close open files */
+//	(void)setpgrp();		/* break away from process group */
 	logger(LOG,"nweb starting",argv[1],getpid());
 	/* setup the network socket */
 	if((listenfd = socket(AF_INET, SOCK_STREAM,0)) <0)
@@ -1426,16 +1470,21 @@ int main(int argc, char **argv)
 		length = sizeof(cli_addr);
 		if((socketfd = accept(listenfd, (struct sockaddr *)&cli_addr, &length)) < 0)
 			logger(ERROR,"system call","accept",0);
-		if((pid = fork()) < 0) {
-			logger(ERROR,"system call","fork",0);
-		}
-		else {
-			if(pid == 0) { 	/* child */
-				(void)close(listenfd);
-				web(socketfd,hit); /* never returns */
-			} else { 	/* parent */
-				(void)close(socketfd);
-			}
-		}
+        web(socketfd,hit, argv[2]); /* never returns *///todo
+		close(socketfd);
+
+//		if((pid = fork()) < 0) {
+//			logger(ERROR,"system call","fork",0);
+//		}
+//		else {
+//			if(pid == 0) { 	/* child */
+//				(void)close(listenfd);
+////				web(socketfd,hit); /* never returns */
+//				web(socketfd,hit, argv[2]); /* never returns *///todo
+//			} else { 	/* parent */
+//				(void)close(socketfd);
+//			}
+//		}
 	}
+	close(listenfd);
 }
