@@ -42,7 +42,8 @@
 #define DEFAULT_IDX_PORT 12346
 #define EAGER_PROTOCOL_LIMIT (1 << 12) /* 4KB limit */
 #define MAX_TEST_SIZE (10 * EAGER_PROTOCOL_LIMIT)
-#define TEST_LOCATION "~/www/"
+//#define TEST_LOCATION "~/www/"
+#define TEST_LOCATION "~/www"
 
 #define MIN_POOL_NODES 10
 #define THROUGHPUT_ATTEMPTS 100

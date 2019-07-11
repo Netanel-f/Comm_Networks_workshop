@@ -691,7 +691,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     if (current_node->value != NULL) {
                         /* small value */
                         response_packet->type = EAGER_GET_RESPONSE;
-                        printf("current_node->val_len %d\n", current_node->val_len);
+                        if (DEBUG) { printf("EAGER GET RESPONSE key: %s val %s current_node->val_len %d\n", current_node->key, current_node->value, current_node->val_len); }
                         response_packet->eager_get_response.value_length = current_node->val_len;
 //                        response_packet->eager_get_response.value_length = strlen(current_node->value);
 //                        memcpy(response_packet->eager_get_response.value, current_node->value, current_node->val_len + 1);
@@ -703,6 +703,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                     } else {
                         ///* need to response with RNDV */
                         response_packet->type = RENDEZVOUS_GET_RESPONSE;
+                        if (DEBUG) { printf("need to response with REND GET \n"); }
                         response_packet->rndv_get_response.value_length = current_node->val_len;
 //                        response_packet->rndv_get_response.value_length = strlen(current_node->large_val_mem_info->rndv_buffer);
                         response_packet->rndv_get_response.server_ptr = (uint64_t) current_node->large_val_mem_info->rndv_mr->addr;
@@ -715,6 +716,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             }
 
             if (current_node == NULL) {
+                if (DEBUG) { printf("urrent_node == NULL key is not exists on server \n"); }
                 /* key is not exists on server, respond "" */
                 struct packet *response_packet = ctx->buf;
                 response_packet->type = EAGER_GET_RESPONSE;
