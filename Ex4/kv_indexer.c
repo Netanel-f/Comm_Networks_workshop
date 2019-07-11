@@ -893,12 +893,13 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             break;
 #ifdef EX4
         case FIND: /* TODO (2LOC): use some hash function */
-            if (DEBUG) { printf("received FIND\n"); }
+            if (DEBUG) { printf("received FIND key: %s\n", packet->find.key); }
             hash_value = hash_key((unsigned char *)packet->find.key);
             response_packet->type = LOCATION;
             response_packet->location.selected_server = (unsigned int) hash_value % (packet->find.num_of_servers);
             response_size = sizeof(struct packet);
             if (DEBUG) { printf("received FIND response size %d\n", response_size); }
+            if (DEBUG) { printf("locationserver: %d\n", response_packet->location.selected_server); }
 //            response_size = sizeof(struct packet) + sizeof(unsigned int);//todo check if needed
             break;
 

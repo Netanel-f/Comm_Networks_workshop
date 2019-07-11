@@ -677,12 +677,11 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
     unsigned int key_length;
     unsigned int value_length;
     if (DEBUG) { printf("handle server type: %d\n", packet->type); }
-    printf("~~handle server type: %d\n", packet->type);
     switch (packet->type) {
 
         /* Only handle packets relevant to the server here - client will handle inside get/set() calls */
         case EAGER_GET_REQUEST:
-
+            if (DEBUG) { printf("case: EAGER_GET_REQUEST\n"); }
             while (current_node != NULL) {
                 if (strcmp(current_node->key, packet->eager_get_request.key) == 0) {
                     /* found match */
@@ -716,7 +715,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             }
 
             if (current_node == NULL) {
-                if (DEBUG) { printf("urrent_node == NULL key is not exists on server \n"); }
+                if (DEBUG) { printf("current_node == NULL key is not exists on server \n"); }
                 /* key is not exists on server, respond "" */
                 struct packet *response_packet = ctx->buf;
                 response_packet->type = EAGER_GET_RESPONSE;
@@ -727,9 +726,11 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             break;
 
         case EAGER_SET_REQUEST:
+            if (DEBUG) { printf("case: EAGER_SET_REQUEST\n"); }
             key_length = strlen(packet->eager_set_request.key_and_value);
             value_length = packet->eager_set_request.value_length;
 
+            if (DEBUG) { printf("case: key: %s value %s\n", packet->eager_set_request.key_and_value, &packet->eager_set_request.key_and_value[key_length+1]); }
             while (current_node != NULL) {
                 /* looking if key already exists */
                 if (strcmp(current_node->key, packet->eager_set_request.key_and_value) == 0) {
@@ -769,13 +770,15 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             }
 
             if (current_node == NULL) {
+                if (DEBUG) { printf("current_node == NULL key is not exists on server \n"); }
                 /* key wasn't found in DB so we need to create it. */
                 KV_ENTRY * temp_node = (KV_ENTRY *) malloc(sizeof(KV_ENTRY));
-                temp_node->key = calloc(key_length, 1);
+                temp_node->key = calloc(key_length + 1, 1);
                 temp_node->value = calloc(value_length, 1);
-
                 strcpy(temp_node->key, packet->eager_set_request.key_and_value);
+                if (DEBUG) { printf("bla1 val leng%d  $$ %s .. %s\n", value_length, &packet->eager_set_request.key_and_value[key_length], &packet->eager_set_request.key_and_value[key_length + 1]); }
                 memcpy(temp_node->value, &packet->eager_set_request.key_and_value[key_length + 1], value_length);
+                if (DEBUG) { printf("bla2\n"); }
 
                 /* fix pointers */
                 temp_node->next_entry = NULL;
@@ -799,6 +802,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
             break;
 
         case RENDEZVOUS_SET_REQUEST:
+            if (DEBUG) { printf("case: RENDEZVOUS_SET_REQUEST\n"); }
             key_length = strlen(packet->rndv_set_request.key);
             value_length = packet->rndv_set_request.value_length;
 //            struct packet * response_packet = ctx->buf;

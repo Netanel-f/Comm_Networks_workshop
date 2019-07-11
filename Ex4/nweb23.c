@@ -952,6 +952,7 @@ int kv_get(void *kv_handle, const char *key, char **value, unsigned *length) {
                 }
 
                 *length = value_len;
+                if (DEBUG) { printf("kv_get value len %d\n", value_len); }
                 if (DEBUG) { printf("kv_get after assign *length %d\n", *length); }
                 *value = (char *) malloc(value_len + 1);
                 if (DEBUG) { printf("kv_get before memcpy \n"); }
@@ -1129,12 +1130,13 @@ int dkv_open(struct kv_server_address *servers, /* array of servers */
 int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length) {
     struct dkv_ctx *ctx = dkv_h;
     struct packet *set_packet = (struct packet*)ctx->indexer->buf;
-    unsigned packet_size = strlen(key) + sizeof(struct packet);
+    unsigned packet_size = strlen(key) + 1 + sizeof(struct packet);
 
     /* Step #1: The client sends the Index server FIND(key, #kv-servers) */
     set_packet->type = FIND;
     set_packet->find.num_of_servers = ctx->mkv->num_servers;
-    memcpy(set_packet->find.key, key, strlen(key));
+    memcpy(set_packet->find.key, key, strlen(key)+1);
+    if (DEBUG) {printf("find.key: %s\n", set_packet->find.key); }
 
     pp_post_recv(ctx->indexer, 1); /* Posts a receive-buffer for LOCATION */
     pp_post_send(ctx->indexer, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
@@ -1156,12 +1158,13 @@ int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
     /* TODO (20LOC): implement similarly to dkv_get() */
     struct dkv_ctx *ctx = dkv_h;
     struct packet *set_packet = (struct packet*)ctx->indexer->buf;
-    unsigned packet_size = strlen(key) + sizeof(struct packet);
+    unsigned packet_size = strlen(key) + 1 + sizeof(struct packet);
 
     /* Step #1: The client sends the Index server FIND(key, #kv-servers) */
     set_packet->type = FIND;
     set_packet->find.num_of_servers = ctx->mkv->num_servers;
-    memcpy(set_packet->find.key, key, strlen(key));
+    memcpy(set_packet->find.key, key, strlen(key)+1);
+    if (DEBUG) {printf("find.key: %s\n", set_packet->find.key); }
 
     pp_post_recv(ctx->indexer, 1); /* Posts a receive-buffer for LOCATION */
     pp_post_send(ctx->indexer, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */

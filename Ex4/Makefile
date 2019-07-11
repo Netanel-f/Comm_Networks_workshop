@@ -41,6 +41,7 @@ kv_indexer.o: kv_indexer.c
 nweb: nweb23.c
 	$(CCA) -libverbs -O2 nweb23.c -o nweb
 
+ex3: kv_server kv_client
 
 .PHONY : clean
 clean:

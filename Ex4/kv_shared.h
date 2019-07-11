@@ -96,10 +96,7 @@ struct packet {
 
         /* EAGER PROTOCOL PACKETS */
         struct {
-#ifdef EX4
             unsigned value_length; /* value is binary, so needs to have length! */
-#endif
-//            unsigned int value_length;
             char key_and_value[0]; /* null terminator between key and value */
         } eager_set_request;
 
