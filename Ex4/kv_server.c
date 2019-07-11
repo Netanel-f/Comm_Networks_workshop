@@ -839,7 +839,7 @@ void handle_server_packets_only(struct pingpong_context *ctx, struct packet *pac
                 if (DEBUG) { printf("current node null\n"); }
                 /* key wasn't found in DB so we need to create it. */
                 KV_ENTRY * temp_node = (KV_ENTRY *) malloc(sizeof(KV_ENTRY));
-                temp_node->key = calloc(key_length, 1);
+                temp_node->key = calloc(key_length + 1, 1);
                 temp_node->value = NULL;
 
 

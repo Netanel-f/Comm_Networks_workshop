@@ -878,7 +878,7 @@ int kv_set(void *kv_handle, const char *key, const char *value, unsigned length)
     packet_size = key_length + 1 + sizeof(struct packet);
     set_packet->rndv_set_request.value_length = value_length;
     memcpy(set_packet->rndv_set_request.key, key, key_length + 1);
-
+    if (DEBUG) { printf("REND set key request: %s, value %s  length %d\n", set_packet->rndv_set_request.key, value, set_packet->rndv_set_request.value_length); }
     /* Posts a receive-buffer for RENDEZVOUS_SET_RESPONSE */
     pp_post_recv(ctx, 1);
     /* Sends the packet to the server */
@@ -1214,7 +1214,8 @@ void recursive_fill_kv(char const* dirname, void *dkv_h) {
             } else if (curr_ent->d_type == DT_REG) {
                 int fd = open(path, O_RDONLY);
                 size_t fsize = lseek(fd, (size_t)0, SEEK_END);
-                void *p = mmap(0, fsize, PROT_READ, MAP_PRIVATE, fd, 0);
+//                void *p = mmap(0, fsize, PROT_READ, MAP_PRIVATE, fd, 0);
+                void *p = mmap(0, fsize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE, fd, 0);
                 /* TODO (1LOC): Add a print here to see you found the full paths... */
                 printf("dkv_set path: %s, file size: %ld\n", path, fsize);
                 dkv_set(dkv_h, path, p, fsize);
@@ -1389,11 +1390,9 @@ void web(int fd, int hit)
 //	while (	(ret = read(file_fd, buffer, BUFSIZE)) > 0 ) {
 //		(void)write(fd,buffer,ret);
 //	}
-//	sleep(1);	/* allow socket to drain before signalling the socket is closed */
-    sleep(100);	/* allow socket to drain before signalling the socket is closed */
+	sleep(1);	/* allow socket to drain before signalling the socket is closed */
     close(fd);
 //    exit(1);
-    return;
 }
 
 
