@@ -2,8 +2,8 @@
 #ifndef COMM_NETS_KV_SHARED_H
 #define COMM_NETS_KV_SHARED_H
 #define _GNU_SOURCE 1   // for compiling purposes
-#define DEBUG true      // for DEBUG purposes
-//#define DEBUG false      // for DEBUG purposes
+//#define DEBUG true      // for DEBUG purposes
+#define DEBUG false      // for DEBUG purposes
 //#define EX3
 #define EX4
 
@@ -116,7 +116,6 @@ struct packet {
         } rndv_get_response;
 
         struct {
-//            unsigned int key_len;//todo add value len, and multi size bufs
             unsigned int value_length;
             char key[0];
         } rndv_set_request;
@@ -149,12 +148,15 @@ struct kv_server_address {
     short port; /* This is useful for multiple servers on a host */
 };
 
+
 enum {
     PINGPONG_RECV_WRID = 1,
     PINGPONG_SEND_WRID = 2,
 };
 
+
 static int page_size;
+
 
 struct pingpong_context {
     struct ibv_context	*context;
@@ -179,6 +181,7 @@ struct pingpong_dest {
     int psn;
     union ibv_gid gid;
 };
+
 
 enum ibv_mtu pp_mtu_to_enum(int mtu) {
     switch (mtu) {
@@ -226,45 +229,6 @@ void gid_to_wire_gid(const union ibv_gid *gid, char wgid[]) {
     for (i = 0; i < 4; ++i)
         sprintf(&wgid[i * 8], "%08x", htonl(*(uint32_t *)(gid->raw + i * 4)));
 }
-
-//enum ibv_mtu pp_mtu_to_enum(int mtu);
-//
-//uint16_t pp_get_local_lid(struct ibv_context *context, int port);
-//
-//int pp_get_port_info(struct ibv_context *context, int port, struct ibv_port_attr *attr);
-//
-//void wire_gid_to_gid(const char *wgid, union ibv_gid *gid);
-//
-//void gid_to_wire_gid(const union ibv_gid *gid, char wgid[]);
-
-//static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
-//                          enum ibv_mtu mtu, int sl,
-//                          struct pingpong_dest *dest, int sgid_idx);
-//
-//static struct pingpong_dest *pp_client_exch_dest(const char *servername, int port,
-//                                                 const struct pingpong_dest *my_dest);
-//
-//static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
-//                                                 int ib_port, enum ibv_mtu mtu,
-//                                                 int port, int sl,
-//                                                 const struct pingpong_dest *my_dest,
-//                                                 int sgid_idx);
-//
-//static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
-//                                            int rx_depth, int port,
-//                                            int use_event, int is_server);
-//
-//int pp_close_ctx(struct pingpong_context *ctx);
-//
-//static int pp_post_recv(struct pingpong_context *ctx, int n);
-//
-//static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key);
-//
-//static void usage(const char *argv0);
-//
-//int orig_main(struct kv_server_address *server, unsigned size, int argc, char *argv[], struct pingpong_context **result_ctx);
-
-//int pp_wait_completions(struct pingpong_context *ctx, int iters);
 
 
 #endif //COMM_NETS_KV_SHARED_H

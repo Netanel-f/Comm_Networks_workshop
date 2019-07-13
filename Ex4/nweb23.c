@@ -37,6 +37,7 @@ MEMORY_INFO * mem_pool_head = NULL;
 MEMORY_INFO * mem_pool_tail = NULL;
 int mem_pool_size = 0;
 
+
 static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
                           enum ibv_mtu mtu, int sl,
                           struct pingpong_dest *dest, int sgid_idx) {
@@ -286,7 +287,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 
     ctx->context = ibv_open_device(ib_dev);
     if (!ctx->context) {
-        if(DEBUG) { printf("ib_dev: %s, port:%d\n", ib_dev->dev_name, port); } //todo delete
+        if(DEBUG) { printf("ib_dev: %s, port:%d\n", ib_dev->dev_name, port); }
         fprintf(stderr, "Couldn't get context for %s\n",
                 ibv_get_device_name(ib_dev));
         return NULL;
@@ -408,6 +409,7 @@ int pp_close_ctx(struct pingpong_context *ctx) {
     return 0;
 }
 
+
 static int pp_post_recv(struct pingpong_context *ctx, int n) {
     struct ibv_sge list = {
             .addr	= (uintptr_t) ctx->buf,
@@ -430,7 +432,10 @@ static int pp_post_recv(struct pingpong_context *ctx, int n) {
     return i;
 }
 
-static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size, const char *local_ptr, void *remote_ptr, uint32_t remote_key) {
+
+static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode, unsigned size,
+        const char *local_ptr, void *remote_ptr, uint32_t remote_key) {
+
     struct ibv_sge list = {
             .addr	= (uintptr_t) (local_ptr ? local_ptr : ctx->buf),
             .length = size,
@@ -459,9 +464,11 @@ static int pp_post_send(struct pingpong_context *ctx, enum ibv_wr_opcode opcode,
 static void usage(const char *argv0) {
 #ifdef EX4
     printf("Usage:\n");
-    printf("  %s <kv_indexer-host> <kv_server#1-host> ... ... <kv_server#N-host>     connect to indexer at <indexer-host>  and #n servers\n", argv0);
+    printf("  %s <kv_indexer-host> <kv_server#1-host> ... ... <kv_server#N-host>"
+           "     connect to indexer at <indexer-host>  and #n servers\n", argv0);
     printf("     and use the default port set in kv_shared header file.\n");
-    printf("  %s <kv_indexer-host:port> <kv_server#1-host:port> ... ... <kv_server#N-host:port>     connect to indexer at <indexer-host>  and #n servers\n", argv0);
+    printf("  %s <kv_indexer-host:port> <kv_server#1-host:port> ... ... <kv_server#N-host:port>"
+           "     connect to indexer at <indexer-host>  and #n servers\n", argv0);
     printf("     and override the default port set in kv_shared header file.\n");
     printf("\n");
 #else
@@ -493,16 +500,12 @@ int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** 
         usage("nweb");
         return 1;
     }
-    if(DEBUG) { printf("parse args before malloc\n"); }
     struct kv_server_address * temp_indexer = (struct kv_server_address *) malloc(sizeof(struct kv_server_address));
     struct kv_server_address * temp_servers = (struct kv_server_address *) malloc((g_argc - 1) * sizeof(struct kv_server_address));
-    if(DEBUG) { printf("parse args after malloc\n"); }
 
     // indexer
     temp_copy = strdup(g_argv[0]);
-    if(DEBUG) { printf("parse args - after strdup\n"); }
     temp_indexer->servername = strtok(temp_copy, ":");
-    if(DEBUG) { printf("parse args - after strtok. indexer: %s\n", temp_indexer->servername); }
     port_token = strtok(NULL, ":");
     if (port_token != NULL) {
         port = atoi(port_token);
@@ -513,13 +516,11 @@ int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** 
     } else {
         temp_indexer->port = DEFAULT_IDX_PORT;
     }
-    if(DEBUG) { printf("parse args - after indexer\n"); }
+
     // servers
     for (int arg_idx = 1; arg_idx < g_argc; arg_idx++) {
         temp_copy = strdup(g_argv[arg_idx]);
-        if(DEBUG) { printf("parse args - after strdup argidx%d\n", arg_idx); }
         temp_servers[arg_idx-1].servername = strtok(temp_copy, ":");
-        if(DEBUG) { printf("parse args - after strtok servername %s\n", temp_servers[arg_idx-1].servername); }
 
         port_token = strtok(NULL, ":");
         if (port_token != NULL) {
@@ -533,12 +534,10 @@ int parse_args(struct kv_server_address ** indexer, struct kv_server_address ** 
         }
     }
 
-    if(DEBUG) { printf("parse args - before last line\n"); }
     temp_servers[g_argc-1].servername = NULL;
     temp_servers[g_argc-1].port = 0;
     *indexer = temp_indexer;
     *servers = temp_servers;
-    if(DEBUG) { printf("parse args - after last line\n"); }
     return 0;
 #else
     // server-hostname<:port>, port is optional
@@ -583,7 +582,7 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
     char                    *servername = server->servername;
     int                      port = server->port;
     int                      ib_port = 1;
-    enum ibv_mtu		      mtu = IBV_MTU_1024;
+    enum ibv_mtu		     mtu = IBV_MTU_1024;
     int                      rx_depth = 1;
     int                      iters = 1000;
     int                      use_event = 0;
@@ -596,92 +595,6 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
 
     srand48(getpid() * time(NULL));
 
-//    while (1) {
-//        int c;
-//
-//        static struct option long_options[] = {
-//                { .name = "port",     .has_arg = 1, .val = 'p' },
-//                { .name = "ib-dev",   .has_arg = 1, .val = 'd' },
-//                { .name = "ib-port",  .has_arg = 1, .val = 'i' },
-//                { .name = "size",     .has_arg = 1, .val = 's' },
-//                { .name = "mtu",      .has_arg = 1, .val = 'm' },
-//                { .name = "rx-depth", .has_arg = 1, .val = 'r' },
-//                { .name = "iters",    .has_arg = 1, .val = 'n' },
-//                { .name = "sl",       .has_arg = 1, .val = 'l' },
-//                { .name = "events",   .has_arg = 0, .val = 'e' },
-//                { .name = "gid-idx",  .has_arg = 1, .val = 'g' },
-//                { 0 }
-//        };
-//
-//        c = getopt_long(argc, argv, "p:d:i:s:m:r:n:l:eg:", long_options, NULL);
-//        if (c == -1)
-//            break;
-//
-//        switch (c) {
-//            case 'p':
-//                port = strtol(optarg, NULL, 0);
-//                if (port < 0 || port > 65535) {
-//                    usage(argv[0]);
-//                    return 1;
-//                }
-//                break;
-//
-//            case 'd':
-//                ib_devname = strdup(optarg);
-//                break;
-//
-//            case 'i':
-//                ib_port = strtol(optarg, NULL, 0);
-//                if (ib_port < 0) {
-//                    usage(argv[0]);
-//                    return 1;
-//                }
-//                break;
-//
-//            case 's':
-//                size = strtol(optarg, NULL, 0);
-//                break;
-//
-//            case 'm':
-//                mtu = pp_mtu_to_enum(strtol(optarg, NULL, 0));
-//                if (mtu < 0) {
-//                    usage(argv[0]);
-//                    return 1;
-//                }
-//                break;
-//
-//            case 'r':
-//                rx_depth = strtol(optarg, NULL, 0);
-//                break;
-//
-//            case 'n':
-//                iters = strtol(optarg, NULL, 0);
-//                break;
-//
-//            case 'l':
-//                sl = strtol(optarg, NULL, 0);
-//                break;
-//
-//            case 'e':
-//                ++use_event;
-//                break;
-//
-//            case 'g':
-//                gidx = strtol(optarg, NULL, 0);
-//                break;
-//
-//            default:
-//                usage(argv[0]);
-//                return 1;
-//        }
-//    }
-//
-//    if (optind == argc - 1)
-//        servername = strdup(argv[optind]);
-//    else if (optind < argc) {
-//        usage(argv[0]);
-//        return 1;
-//    }
 
     page_size = sysconf(_SC_PAGESIZE);
 
@@ -708,7 +621,6 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
             return 1;
         }
     }
-    if(DEBUG) { printf("srvname %s ||| ib_dev: %s, port:%d\n", servername, ib_dev->dev_name, port); } //todo delete
     ctx = pp_init_ctx(ib_dev, size, rx_depth, ib_port, use_event, !servername);
     if (!ctx)
         return 1;
@@ -772,6 +684,7 @@ int orig_main(struct kv_server_address *server, unsigned size, int argc, char *a
     *result_ctx = ctx;
     return 0;
 }
+
 
 int pp_wait_completions(struct pingpong_context *ctx, int iters) {
     int rcnt, scnt, num_cq_events, use_event = 0;
@@ -857,17 +770,15 @@ int kv_set(void *kv_handle, const char *key, const char *value, unsigned length)
     if (DEBUG) { printf("RENDEZVOUS_SET_REQUEST\n"); }
     /* maybe already cached*/
     if ((last_rndv_accessed_key != NULL) && (strcmp(key, last_rndv_accessed_key) == 0)) {
-        if (DEBUG) { printf("kv_set key %s == last rndv: %s\n", key, last_rndv_accessed_key); }
         last_accessed_key_val_length = value_length;
         // set temp mr
         struct ibv_mr *orig_mr = ctx->mr;
         struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) value, value_length + 1,
-                                            IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE |
-                                            IBV_ACCESS_REMOTE_READ);
+                IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+
         ctx->mr = temp_mr;
         pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length + 1, value,
-                     (void *) last_accessed_server_addr,
-                     last_accessed_server_rkey);
+                     (void *) last_accessed_server_addr, last_accessed_server_rkey);
 
         int ret_value = pp_wait_completions(ctx, 1);
         ctx->mr = orig_mr;
@@ -878,7 +789,6 @@ int kv_set(void *kv_handle, const char *key, const char *value, unsigned length)
     packet_size = key_length + 1 + sizeof(struct packet);
     set_packet->rndv_set_request.value_length = value_length;
     memcpy(set_packet->rndv_set_request.key, key, key_length + 1);
-    if (DEBUG) { printf("REND set key request: %s, value %s  length %d\n", set_packet->rndv_set_request.key, value, set_packet->rndv_set_request.value_length); }
     /* Posts a receive-buffer for RENDEZVOUS_SET_RESPONSE */
     pp_post_recv(ctx, 1);
     /* Sends the packet to the server */
@@ -890,7 +800,9 @@ int kv_set(void *kv_handle, const char *key, const char *value, unsigned length)
     assert(set_packet->type == RENDEZVOUS_SET_RESPONSE);
     // set temp mr
     struct ibv_mr * orig_mr = ctx->mr;
-    struct ibv_mr * temp_mr = ibv_reg_mr(ctx->pd, (void*)value, value_length, IBV_ACCESS_LOCAL_WRITE |IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+    struct ibv_mr * temp_mr = ibv_reg_mr(ctx->pd, (void*)value, value_length,
+            IBV_ACCESS_LOCAL_WRITE |IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+
     ctx->mr = temp_mr;
 
     /* update cache */
@@ -899,15 +811,10 @@ int kv_set(void *kv_handle, const char *key, const char *value, unsigned length)
     last_accessed_server_addr = set_packet->rndv_set_response.server_ptr;
     last_accessed_server_rkey = set_packet->rndv_set_response.server_key;
 
-    if (DEBUG) { printf("1REND set key response from server: %s, server_addr %ld, server_rkey %d\n", last_rndv_accessed_key, last_accessed_server_addr, last_accessed_server_rkey); }
-
     pp_post_send(ctx, IBV_WR_RDMA_WRITE, value_length, value, (void *)set_packet->rndv_set_response.server_ptr, set_packet->rndv_set_response.server_key);
-    if (DEBUG) { printf("2REND set key response from server: %s, server_addr %ld, server_rkey %d\n", last_rndv_accessed_key, last_accessed_server_addr, last_accessed_server_rkey); }
     int ret_value = pp_wait_completions(ctx, 1);
-    if (DEBUG) { printf("3REND set key response from server: %s, server_addr %ld, server_rkey %d\n", last_rndv_accessed_key, last_accessed_server_addr, last_accessed_server_rkey); }
     ctx->mr = orig_mr;
     ibv_dereg_mr(temp_mr);
-    if (DEBUG) { printf("4REND set key response from server: %s, server_addr %ld, server_rkey %d\n", last_rndv_accessed_key, last_accessed_server_addr, last_accessed_server_rkey); }
     return ret_value;
 }
 
@@ -921,7 +828,7 @@ int kv_get(void *kv_handle, const char *key, char **value, unsigned *length) {
     unsigned packet_size = key_length + 1 + sizeof(struct packet);
 
     if (packet_size > EAGER_PROTOCOL_LIMIT) {
-        printf("ERROR");//todo
+        printf("ERROR");
         return -1;
     }
 
@@ -935,7 +842,6 @@ int kv_get(void *kv_handle, const char *key, char **value, unsigned *length) {
         pp_post_send(ctx, IBV_WR_SEND, packet_size, NULL, NULL, 0);
         /* await EAGER_GET_REQUEST completion */
         pp_wait_completions(ctx, 2);
-//        pp_wait_completions(ctx, 1);//todo delete
 
         struct packet *response_packet = (struct packet *) ctx->buf;
         unsigned int value_len;
@@ -944,22 +850,11 @@ int kv_get(void *kv_handle, const char *key, char **value, unsigned *length) {
             case EAGER_GET_RESPONSE:
                 if (DEBUG) { printf("kv_get key %s, EAGER_GET_RESPONSE\n", key); }
                 value_len = response_packet->eager_get_response.value_length;
-                if (DEBUG) {
-                    if (length == NULL)
-                        printf("kv_get  NULL *length %d\n", *length);
-                    else
-                        printf("kv_get *length %p\n", length);
-                }
 
                 *length = value_len;
-                if (DEBUG) { printf("kv_get value len %d\n", value_len); }
-                if (DEBUG) { printf("kv_get after assign *length %d\n", *length); }
                 *value = (char *) malloc(value_len + 1);
-                if (DEBUG) { printf("kv_get before memcpy \n"); }
                 memcpy(*value, response_packet->eager_get_response.value, value_len);
-                if (DEBUG) { printf("kv_get before memset \n"); }
                 memset(&((*value)[value_len]), '\0', 1);
-                if (DEBUG) { printf("kv_get before break \n"); }
                 break;
 
             case RENDEZVOUS_GET_RESPONSE:
@@ -977,9 +872,8 @@ int kv_get(void *kv_handle, const char *key, char **value, unsigned *length) {
                 // set temp mr
                 struct ibv_mr *orig_mr = ctx->mr;
                 struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) *value, value_len + 1,
-                                                    IBV_ACCESS_LOCAL_WRITE |
-                                                    IBV_ACCESS_REMOTE_WRITE |
-                                                    IBV_ACCESS_REMOTE_READ);
+                        IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+
                 ctx->mr = temp_mr;
 
                 pp_post_send(ctx, IBV_WR_RDMA_READ, value_len + 1, *value,
@@ -991,21 +885,18 @@ int kv_get(void *kv_handle, const char *key, char **value, unsigned *length) {
                 break;
 
             default:
-                printf("ERROR");//todo
+                printf("ERROR");
                 return -1;
         }
 
     } else {
-        if (DEBUG) { printf("kv_get key %s == last rndv: %s\n", key, last_rndv_accessed_key); }
-        if (DEBUG) { printf("last_accessed_key_val_length %d last_accessed_server_addr %ld, last_accessed_server_rkey %d\n", last_accessed_key_val_length, last_accessed_server_addr, last_accessed_server_rkey); }
         *value = calloc(last_accessed_key_val_length + 1, 1);
 
         // set temp mr
         struct ibv_mr *orig_mr = ctx->mr;
         struct ibv_mr *temp_mr = ibv_reg_mr(ctx->pd, (void *) *value, last_accessed_key_val_length + 1,
-                                            IBV_ACCESS_LOCAL_WRITE |
-                                            IBV_ACCESS_REMOTE_WRITE |
-                                            IBV_ACCESS_REMOTE_READ);
+                IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
+
         ctx->mr = temp_mr;
 
         pp_post_send(ctx, IBV_WR_RDMA_READ, last_accessed_key_val_length, *value,
@@ -1015,7 +906,6 @@ int kv_get(void *kv_handle, const char *key, char **value, unsigned *length) {
         pp_wait_completions(ctx, 1);
         ctx->mr = orig_mr;
         ibv_dereg_mr(temp_mr);
-        if (DEBUG) { printf("kv_get value read: %s\n", *value); }
     }
 
     return 0;
@@ -1097,7 +987,6 @@ void mkv_close(void *mkv_h) {
     unsigned count;
     struct mkv_ctx *ctx = mkv_h;
     for (count = 0; count < ctx->num_servers; count++) {
-//		pp_close_ctx((struct pingpong_context*)ctx->kv_ctxs[count]);
         kv_close(ctx->kv_ctxs[count]);
     }
     free(ctx);
@@ -1114,16 +1003,14 @@ int dkv_open(struct kv_server_address *servers, /* array of servers */
              struct kv_server_address *indexer, /* single indexer */
              void **dkv_h) {
     struct dkv_ctx *ctx = malloc(sizeof(*ctx));
-    if(DEBUG) { printf("dkv_open indexer: %s : %d\n", indexer->servername, indexer->port); }
     if (orig_main(indexer, EAGER_PROTOCOL_LIMIT, g_argc, g_argv, &ctx->indexer)) {
-        if(DEBUG) { printf("ERRdkv_open indexer: %s : %d\n", indexer->servername, indexer->port); }
         return 1;
     }
     if (mkv_open(servers, (void**)&ctx->mkv)) {
         return 1;
     }
     *dkv_h = ctx;
-    return 0;//todo verify
+    return 0;
 }
 
 
@@ -1136,26 +1023,23 @@ int dkv_set(void *dkv_h, const char *key, const char *value, unsigned length) {
     set_packet->type = FIND;
     set_packet->find.num_of_servers = ctx->mkv->num_servers;
     memcpy(set_packet->find.key, key, strlen(key)+1);
-    if (DEBUG) {printf("find.key: %s\n", set_packet->find.key); }
 
-    pp_post_recv(ctx->indexer, 1); /* Posts a receive-buffer for LOCATION */
-    pp_post_send(ctx->indexer, IBV_WR_SEND, packet_size, NULL, NULL, 0); /* Sends the packet to the server */
-    assert(pp_wait_completions(ctx->indexer, 2) == 0); /* wait for both to complete */
+    /* Posts a receive-buffer for LOCATION */
+    pp_post_recv(ctx->indexer, 1);
+    /* Sends the packet to the server */
+    pp_post_send(ctx->indexer, IBV_WR_SEND, packet_size, NULL, NULL, 0);
+    /* wait for both to complete */
+    assert(pp_wait_completions(ctx->indexer, 2) == 0);
 
     /* Step #2: The Index server responds with LOCATION(#kv-server-id) */
-    if (DEBUG) {printf("packet type: %d\n", set_packet->type); }
     assert(set_packet->type == LOCATION);
 
     /* Step #3: The client contacts KV-server with the ID returned in LOCATION, using SET/GET messages. */
-//    return mkv_set(ctx->mkv, set_packet->location.selected_server, key, value);
     return mkv_set(ctx->mkv, set_packet->location.selected_server, key, value, length);
-    /* TODO (10LOC): Add this value length parameter to all the relevant functions... including kv_set()/kv_get() */
 }
 
 
-//int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
 int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
-    /* TODO (20LOC): implement similarly to dkv_get() */
     struct dkv_ctx *ctx = dkv_h;
     struct packet *set_packet = (struct packet*)ctx->indexer->buf;
     unsigned packet_size = strlen(key) + 1 + sizeof(struct packet);
@@ -1174,7 +1058,6 @@ int dkv_get(void *dkv_h, const char *key, char **value, unsigned *length) {
     assert(set_packet->type == LOCATION);
 
     /* Step #3: The client contacts KV-server with the ID returned in LOCATION, using SET/GET messages. */
-//    return mkv_get(ctx->mkv, set_packet->location.selected_server, key, value);
     return mkv_get(ctx->mkv, set_packet->location.selected_server, key, value, length);
 }
 
@@ -1190,7 +1073,7 @@ int dkv_close(void *dkv_h) {
 //	pp_close_ctx(ctx->indexer);
     mkv_close(ctx->mkv);
     free(ctx);
-    return 0;//todo verify
+    return 0;
 }
 
 
@@ -1217,9 +1100,7 @@ void recursive_fill_kv(char const* dirname, void *dkv_h) {
             } else if (curr_ent->d_type == DT_REG) {
                 int fd = open(path, O_RDONLY);
                 size_t fsize = lseek(fd, (size_t)0, SEEK_END);
-//                void *p = mmap(0, fsize, PROT_READ, MAP_PRIVATE, fd, 0);
                 void *p = mmap(0, fsize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE, fd, 0);
-                /* TODO (1LOC): Add a print here to see you found the full paths... */
                 printf("dkv_set path: %s, file size: %ld\n", path, fsize);
                 dkv_set(dkv_h, path, p, fsize);
                 munmap(p, fsize);
@@ -1240,6 +1121,7 @@ void recursive_fill_kv(char const* dirname, void *dkv_h) {
 #endif /* EX4 */
 
 //// end of kv_client copy
+
 struct {
     char *ext;
     char *filetype;
@@ -1331,48 +1213,16 @@ void web(int fd, int hit)
     }
     if(fstr == 0) logger(FORBIDDEN,"file extension type not supported",buffer,fd);
 
-//	if(( file_fd = open(&buffer[5],O_RDONLY)) == -1) {  /* open the file for reading */
-//		logger(NOTFOUND, "failed to open file",&buffer[5],fd);
-//	}
-//	logger(LOG,"SEND",&buffer[5],hit);
-//	len = (long)lseek(file_fd, (off_t)0, SEEK_END); /* lseek to the file end to find the length */
-//	      (void)lseek(file_fd, (off_t)0, SEEK_SET); /* lseek back to the file start ready for reading */
-//          (void)sprintf(buffer,"HTTP/1.1 200 OK\nServer: nweb/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", VERSION, len, fstr); /* Header + a blank line */
-//	logger(LOG,"Header",buffer,hit);
-//    (void)write(fd,buffer,strlen(buffer));
-//
-//    /* send file in 8KB block - last block may be smaller */
-//    while (	(ret = read(file_fd, buffer, BUFSIZE)) > 0 ) {
-//        (void)write(fd,buffer,ret);
-//    }
-//    sleep(1);	/* allow socket to drain before signalling the socket is closed */
-//    close(fd);
-//    exit(1);
 
-
-    ////TODO DKV_GET code
+    //// DKV_GET code
     unsigned int file_length;
     size_t dir_path_len = strlen(top_dir);
     size_t buffer_len = strlen(&buffer[4]);
     char * key = (char *) calloc((strlen(&buffer[4]) + dir_path_len + 1), 1);
     memcpy(key, top_dir, dir_path_len);
-//    key[dir_path_len] = '/';
     memcpy(&key[dir_path_len], &buffer[4], buffer_len+1);
-//    memset(&key[dir_path_len], '/', 1);
-//////
-//// size_t dir_path_len = strlen(dir_path);
-//    size_t buffer_len = strlen(&buffer[5]);
-//    char * key = (char *) calloc((strlen(&buffer[5]) + dir_path_len + 2), 1);
-//    memcpy(key, dir_path, dir_path_len);
-////    key[dir_path_len] = '/';
-//    memcpy(&key[dir_path_len+1], &buffer[5], buffer_len+1);
-////    memset(&key[dir_path_len], '/', 1);
-//////
-    if (DEBUG) {
-        printf("buffer: %s\n", buffer);
-        printf("key: %s\n", key);
-        printf("dir_path: %s\n", top_dir);
-    }
+
+    if (DEBUG) { printf("buffer: %s\n key: %s\n dir_path: %s\n", buffer, key, top_dir); }
 
     char * value = (char *) malloc(MAX_TEST_SIZE);
     if (dkv_get(kv_ctx, key, &value, &file_length) != 0) {
@@ -1382,7 +1232,8 @@ void web(int fd, int hit)
     len = file_length;
     free(key);
 
-    (void)sprintf(buffer,"HTTP/1.1 200 OK\nServer: nweb/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", VERSION, len, fstr); /* Header + a blank line */
+    /* Header + a blank line */
+    (void)sprintf(buffer,"HTTP/1.1 200 OK\nServer: nweb/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", VERSION, len, fstr);
     logger(LOG,"Header",buffer,hit);
 
 
@@ -1395,7 +1246,6 @@ void web(int fd, int hit)
 //	}
 	sleep(1);	/* allow socket to drain before signalling the socket is closed */
     close(fd);
-//    exit(1);
 }
 
 
@@ -1408,8 +1258,6 @@ void web(int fd, int hit)
 void * init_dkvs_client(int argc, char **argv) {
     if (DEBUG) { printf("init_dkvs_client \n"); }
     void * kv_ctx; /* handle to internal KV-client context */
-//    g_argc = argc - 3;
-//    g_argv = &argv[3];
     g_argc = argc - 2;
     g_argv = &argv[2];
 
@@ -1417,7 +1265,7 @@ void * init_dkvs_client(int argc, char **argv) {
     struct kv_server_address * indexer = NULL;
     assert (parse_args(&indexer, &servers) == 0);
     assert(0 == my_open(servers, indexer, &kv_ctx));
-    return kv_ctx;//todo check if needed
+    return kv_ctx;
 }
 
 
@@ -1428,10 +1276,7 @@ int main(int argc, char **argv)
     static struct sockaddr_in cli_addr; /* static = initialised to zeros */
     static struct sockaddr_in serv_addr; /* static = initialised to zeros */
 
-//	if( argc < 3  || argc > 3 || !strcmp(argv[1], "-?") ) {
-//		(void)printf("hint: nweb Port-Number Top-Directory\t\tversion %d\n\n"
-    if( argc < 4 || !strcmp(argv[1], "-?")) {//todo
-//		(void)printf("hint: nweb Port-Number Top-Directory <indexer> <server>...<server>\t\tversion %d\n\n"
+    if( argc < 4 || !strcmp(argv[1], "-?")) {
         (void)printf("hint: nweb Port-Number <indexer> <server>...<server>\t\tversion %d\n\n"
                      "\tnweb is a small and very safe mini web server\n"
                      "\tnweb only servers out file/web pages with extensions named below\n"
@@ -1451,11 +1296,9 @@ int main(int argc, char **argv)
     if (TEST_LOCATION[0] == '~') {
         strcpy(top_dir, getenv("HOME"));
         size_t home_len = strlen(top_dir);
-//	    top_dir[home_len] = '/';
         strcpy(&top_dir[home_len], &TEST_LOCATION[1]);
-        if (DEBUG) { printf("top_dir: %s\n", top_dir); }
     }
-    ////todo
+
     if( !strncmp(top_dir,"/"   ,2 ) || !strncmp(top_dir,"/etc", 5 ) ||
         !strncmp(top_dir,"/bin",5 ) || !strncmp(top_dir,"/lib", 5 ) ||
         !strncmp(top_dir,"/tmp",5 ) || !strncmp(top_dir,"/usr", 5 ) ||
@@ -1467,27 +1310,11 @@ int main(int argc, char **argv)
         (void)printf("ERROR: Can't Change to directory %s\n",top_dir);
         exit(4);
     }
-    ////end todo
-
-//	if( !strncmp(argv[2],"/"   ,2 ) || !strncmp(argv[2],"/etc", 5 ) ||
-//	    !strncmp(argv[2],"/bin",5 ) || !strncmp(argv[2],"/lib", 5 ) ||
-//	    !strncmp(argv[2],"/tmp",5 ) || !strncmp(argv[2],"/usr", 5 ) ||
-//	    !strncmp(argv[2],"/dev",5 ) || !strncmp(argv[2],"/sbin",6) ){
-//		(void)printf("ERROR: Bad top directory %s, see nweb -?\n",argv[2]);
-//		exit(3);
-//	}
-//	if(chdir(argv[2]) == -1){
-//		(void)printf("ERROR: Can't Change to directory %s\n",argv[2]);
-//		exit(4);
-//	}
 
     //// init dkvs client & fill_kv
-//    void * kv_ctx = init_dkvs_client(argc, argv);
     kv_ctx = init_dkvs_client(argc, argv);
     assert(kv_ctx != NULL);
-
     recursive_fill_kv(top_dir, kv_ctx);
-//    recursive_fill_kv(argv[2], kv_ctx);//todo
     //// end of init dkvs client & fill_kv
 
 //	/* Become deamon + unstopable and no zombies children (= no wait()) */
@@ -1516,21 +1343,8 @@ int main(int argc, char **argv)
         length = sizeof(cli_addr);
         if((socketfd = accept(listenfd, (struct sockaddr *)&cli_addr, &length)) < 0)
             logger(ERROR,"system call","accept",0);
-        web(socketfd,hit); /* never returns *///todo
+        web(socketfd,hit); /* never returns */
         close(socketfd);
-
-//		if((pid = fork()) < 0) {
-//			logger(ERROR,"system call","fork",0);
-//		}
-//		else {
-//			if(pid == 0) { 	/* child */
-//				(void)close(listenfd);
-////				web(socketfd,hit); /* never returns */
-//				web(socketfd,hit, argv[2]); /* never returns *///todo
-//			} else { 	/* parent */
-//				(void)close(socketfd);
-//			}
-//		}
     }
     close(listenfd);
 }
