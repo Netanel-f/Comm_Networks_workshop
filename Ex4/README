@@ -1,0 +1,37 @@
+README
+------
+The program is Server-Client application to test throughput of both protocols.
+The code is build from handlers and setters for EAGER/RENDEZVOUS protocols.
+in both cases a connection is setup using TCP/IP and then an IB connection is set between the two devices.
+I have chose to build 3 different modules, one for each use: Server, Client & Indexer.
+KV_server is storing key-value pairs.
+KV_Indexer is using hash function to determine which kv_server is responsible for the key's value.
+kv_client - a client.
+
+Part 2 is a web server using our solution to part 1, in order to reply for HTTP requests.
+
+I have tested throught put of part 1 on this environment:
+-An instance of kv_indexer & kv_client running on mlx-stud-01
+-2 instances of kv_server running on mlx-stud-02 & mlx-stud-03
+
+
+Part 1 Results:
+Value size: 1	Bytes,	Throughput: 5.916	Mbps
+Value size: 2	Bytes,	Throughput: 6.804	Mbps
+Value size: 4	Bytes,	Throughput: 8.116	Mbps
+Value size: 8	Bytes,	Throughput: 11.022	Mbps
+Value size: 16	Bytes,	Throughput: 17.712	Mbps
+Value size: 32	Bytes,	Throughput: 28.544	Mbps
+Value size: 64	Bytes,	Throughput: 5.326	Mbps
+Value size: 128	Bytes,	Throughput: 95.691	Mbps
+Value size: 256	Bytes,	Throughput: 13.489	Mbps
+Value size: 512	Bytes,	Throughput: 5.698	Mbps
+Value size: 1	KBytes,	Throughput: 4.139	Mbps
+Value size: 2	KBytes,	Throughput: 3.815	Mbps
+Value size: 4	KBytes,	Throughput: 117.616	Mbps
+Value size: 8	KBytes,	Throughput: 380.917	Mbps
+Value size: 16	KBytes,	Throughput: 1.192	Gbps
+Value size: 32	KBytes,	Throughput: 1.239	Gbps
+
+
+We didnt had any instruction regarding how to examine part 2 throughput.

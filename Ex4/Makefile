@@ -14,7 +14,7 @@ TARNAME = 201209806.tar.gz
 TARSRCS = ${ALL} ${EXE} Makefile
 
 EXE = kv_server kv_client kv_indexer nweb
-ALL = kv_server.c kv_client.c kv_indexer.c kv_shared.h README nweb32.c
+ALL = kv_server.c kv_client.c kv_indexer.c kv_shared.h README nweb23.c index.html nigel.jpg favicon.ico
 
 default: all
 
