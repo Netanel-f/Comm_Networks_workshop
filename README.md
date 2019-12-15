@@ -1,2 +1,2 @@
-# Comm_Nets
-67613 - Communication Networks Workshop
+# Comm_Networks_workshop 
+Communication Networks Workshop
